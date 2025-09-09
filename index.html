@@ -4,128 +4,156 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-    <title>MindAR 5 Targets Demo</title>
+    <title>MindAR 5 Targets — Debug</title>
 
-    <!-- A-Frame 與 MindAR（A-Frame 版本） -->
+    <!-- A-Frame + MindAR -->
     <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar-js@1.2.2/dist/mindar-image-aframe.prod.js"></script>
 
     <style>
+        html,
         body {
             margin: 0;
+            height: 100%;
             overflow: hidden;
+            background: #000;
         }
 
-        #ui {
+        #hud {
             position: fixed;
             left: 8px;
-            bottom: 8px;
+            top: 8px;
             z-index: 10;
-            background: rgba(0, 0, 0, .55);
+            max-width: min(92vw, 600px);
+            background: rgba(0, 0, 0, .65);
             color: #fff;
-            padding: 8px 10px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        #startBtn {
+            margin-top: 6px;
+            padding: 6px 10px;
             border-radius: 10px;
-            font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto;
+            border: 0;
+            cursor: pointer
         }
     </style>
 </head>
 
 <body>
-    <div id="ui">Targets found: <span id="count">0</span><br>Last: <span id="last">—</span></div>
+    <div id="hud">Booting…</div>
 
-    <!-- mindar-image：載入 5 張 target 的 .mind -->
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: true" embedded color-space="sRGB"
-        renderer="colorManagement: true, physicallyCorrectLights: true, alpha: true" vr-mode-ui="enabled: false"
-        device-orientation-permission-ui="enabled: true">
-
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: false"
+        renderer="colorManagement: true; physicallyCorrectLights: true; alpha: true" embedded
+        vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: true">
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-        <!-- 5 個 target 容器（targetIndex 0~4） -->
-        <a-entity mindar-image-target="targetIndex: 0">
-            <!-- 球放在 marker 前方（-Z 為朝向相機的前方） -->
-            <a-sphere id="ball-0" position="0 0 -0.08" radius="0.035" segments-width="32" segments-height="32"
-                visible="false"></a-sphere>
-        </a-entity>
-
-        <a-entity mindar-image-target="targetIndex: 1">
-            <a-sphere id="ball-1" position="0 0 -0.08" radius="0.035" segments-width="32" segments-height="32"
-                visible="false"></a-sphere>
-        </a-entity>
-
-        <a-entity mindar-image-target="targetIndex: 2">
-            <a-sphere id="ball-2" position="0 0 -0.08" radius="0.035" segments-width="32" segments-height="32"
-                visible="false"></a-sphere>
-        </a-entity>
-
-        <a-entity mindar-image-target="targetIndex: 3">
-            <a-sphere id="ball-3" position="0 0 -0.08" radius="0.035" segments-width="32" segments-height="32"
-                visible="false"></a-sphere>
-        </a-entity>
-
-        <a-entity mindar-image-target="targetIndex: 4">
-            <a-sphere id="ball-4" position="0 0 -0.08" radius="0.035" segments-width="32" segments-height="32"
-                visible="false"></a-sphere>
-        </a-entity>
+        <!-- 5 個 target 容器 -->
+        <a-entity mindar-image-target="targetIndex: 0"></a-entity>
+        <a-entity mindar-image-target="targetIndex: 1"></a-entity>
+        <a-entity mindar-image-target="targetIndex: 2"></a-entity>
+        <a-entity mindar-image-target="targetIndex: 3"></a-entity>
+        <a-entity mindar-image-target="targetIndex: 4"></a-entity>
     </a-scene>
 
     <script>
-        // ===== 讓 5 顆球顏色「隨機但互不相同」 =====
-        // 作法：從一個高對比色盤中「隨機抽 5 色」不重複
-        const PALETTE = [
-            '#e74c3c', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6',
-            '#e67e22', '#1abc9c', '#e84393', '#16a085', '#d35400'
-        ];
-        function pickDistinct(n) {
-            const pool = [...PALETTE];
-            const out = [];
-            for (let i = 0; i < n; i++) {
-                const k = Math.floor(Math.random() * pool.length);
-                out.push(pool.splice(k, 1)[0]);
+        const hud = document.getElementById('hud');
+        const log = (...args) => { hud.textContent += '\n' + args.join(' '); console.log(...args); };
+        const set = (text) => { hud.textContent = text; console.log(text); };
+
+        // 1) 先測試 targets.mind 是否能被取到（路徑錯誤會白畫面）
+        (async () => {
+            set('Checking ./targets.mind …');
+            try {
+                const r = await fetch('./targets.mind', { cache: 'no-store' });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const buf = await r.arrayBuffer();
+                log(`OK, size=${(buf.byteLength / 1024).toFixed(1)} KB`);
+            } catch (e) {
+                log('❌ 無法讀取 targets.mind（路徑或檔案問題）→ 白畫面常見原因');
+                log(String(e));
             }
-            return out;
-        }
+        })();
+
+        // 2) 建立色盤（保證 5 色不重複）
+        const PALETTE = ['#e74c3c', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6', '#e67e22', '#1abc9c', '#e84393', '#16a085', '#d35400'];
+        function pickDistinct(n) { const pool = [...PALETTE], out = []; for (let i = 0; i < n; i++) { out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]); } return out; }
         const colors = pickDistinct(5);
 
-        // 指到每顆球
-        const balls = [
-            document.querySelector('#ball-0'),
-            document.querySelector('#ball-1'),
-            document.querySelector('#ball-2'),
-            document.querySelector('#ball-3'),
-            document.querySelector('#ball-4')
-        ];
-        // 指到每個 target 容器（用來監聽 found/lost）
+        // 3) MindAR 事件與 target 行為（found 才 create，lost 就 remove）
+        const sceneEl = document.querySelector('a-scene');
         const targets = Array.from(document.querySelectorAll('[mindar-image-target]'));
+        const spawned = new Array(5).fill(null);
+        const visibleState = new Array(5).fill(false);
 
-        // UI
-        const uiCount = document.querySelector('#count');
-        const uiLast = document.querySelector('#last');
-        const visibleState = [false, false, false, false, false];
+        // 在 iOS/Safari 有時需要使用者手勢啟動，做一顆 Start 按鈕保險
+        const startBtn = document.createElement('button');
+        startBtn.id = 'startBtn';
+        startBtn.textContent = 'Start AR';
+        startBtn.onclick = async () => {
+            try {
+                set('Starting AR…');
+                await sceneEl.systems['mindar-image-system'].start(); // 手動啟動
+                log('✅ AR started');
+                startBtn.remove();
+            } catch (e) {
+                log('❌ start 失敗：', e);
+            }
+        };
+        hud.appendChild(startBtn);
 
-        // 綁定事件
-        targets.forEach((t, idx) => {
-            const ball = balls[idx];
-            // 預先套上顏色
-            ball.setAttribute('material', 'color', colors[idx]);
+        sceneEl.addEventListener('loaded', () => {
+            log('A-Frame loaded');
+            // MindAR lifecycle
+            sceneEl.addEventListener('arReady', () => log('✅ arReady（相機/管線啟動）'));
+            sceneEl.addEventListener('arError', (e) => log('❌ arError：', e && e.detail ? e.detail : 'unknown'));
 
-            t.addEventListener('targetFound', () => {
-                visibleState[idx] = true;
-                ball.setAttribute('visible', true);
-                uiLast.textContent = `#${idx}`;
-                uiCount.textContent = visibleState.filter(Boolean).length;
-            });
-
-            t.addEventListener('targetLost', () => {
-                visibleState[idx] = false;
-                ball.setAttribute('visible', false);
-                uiCount.textContent = visibleState.filter(Boolean).length;
+            // 綁定 target found/lost
+            targets.forEach((t, idx) => {
+                t.addEventListener('targetFound', () => {
+                    visibleState[idx] = true;
+                    log(`found #${idx}`);
+                    // 動態生成球（若尚未生成）
+                    if (!spawned[idx]) {
+                        const s = document.createElement('a-sphere');
+                        s.setAttribute('position', '0 0 -0.08'); // 圖片正前方 8cm
+                        s.setAttribute('radius', '0.035');
+                        s.setAttribute('segments-width', '32');
+                        s.setAttribute('segments-height', '32');
+                        s.setAttribute('material', `color: ${colors[idx]}`);
+                        t.appendChild(s);
+                        spawned[idx] = s;
+                    }
+                });
+                t.addEventListener('targetLost', () => {
+                    visibleState[idx] = false;
+                    log(`lost  #${idx}`);
+                    if (spawned[idx]) { spawned[idx].remove(); spawned[idx] = null; }
+                });
             });
         });
 
-        // ❗座標說明：
-        // 在 MindAR（A-Frame）的 target 本地座標中，-Z 軸朝向相機。
-        // 所以把球放在 position="0 0 -0.08" 就是「在圖片正前方 8 公分」。
-        // 想更近/更遠，調整 -0.08 的數值即可。
+        // 自動嘗試啟動：有些瀏覽器可以自動成功，失敗也有 Start 按鈕兜底
+        window.addEventListener('load', async () => {
+            try {
+                set('Booting… autoStart try');
+                await sceneEl.systems['mindar-image-system'].start();
+                log('✅ autoStart 成功');
+                startBtn.remove();
+            } catch (e) {
+                log('ℹ️ autoStart 被阻擋（正常），請點 Start AR');
+            }
+        });
+
+        // 4) 裝置與相機可用性（額外提示）
+        navigator.mediaDevices?.getUserMedia({ video: true })
+            .then(() => log('✅ 瀏覽器允許相機（測試用）'))
+            .catch(err => log('⚠️ 相機權限被拒/無法取得：', err && err.name));
+
     </script>
 </body>
 
