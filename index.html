@@ -6,7 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <title>MindAR 5 Targets — Debug</title>
 
-    <!-- A-Frame + MindAR -->
     <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar-js@1.2.2/dist/mindar-image-aframe.prod.js"></script>
 
@@ -43,23 +42,17 @@
             padding: 14px 24px;
             background: #28a745;
             color: #fff;
-            border: none;
+            border: 0;
             border-radius: 12px;
-            /* 超高層級，確保在最上層 */
             z-index: 2147483647;
-            /* 可以點擊 */
             pointer-events: auto;
             cursor: pointer;
         }
     </style>
-
-
-
 </head>
 
 <body>
     <div id="hud">Booting…</div>
-
     <button id="startBtn">▶ Start AR</button>
 
     <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: false"
@@ -67,7 +60,6 @@
         vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: true">
         <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-        <!-- 5 個 target 容器 -->
         <a-entity mindar-image-target="targetIndex: 0"></a-entity>
         <a-entity mindar-image-target="targetIndex: 1"></a-entity>
         <a-entity mindar-image-target="targetIndex: 2"></a-entity>
@@ -76,19 +68,11 @@
     </a-scene>
 
     <script>
-        const VERSION = "v0.0.3"; // ← 每次你改檔案就手動調整
-
         const hud = document.getElementById('hud');
-        const log = (...args) => {
-            hud.textContent += '\n' + `[${VERSION}] ` + args.join(' ');
-            console.log(`[${VERSION}]`, ...args);
-        };
-        const set = (text) => {
-            hud.textContent = `[${VERSION}] ` + text;
-            console.log(`[${VERSION}]`, text);
-        };
+        const log = (...a) => { hud.textContent += '\n' + a.join(' '); console.log(...a); };
+        const set = (t) => { hud.textContent = t; console.log(t); };
 
-        // 1) 先測試 targets.mind 是否能被取到（路徑錯誤會白畫面）
+        // 讀檔偵錯：確認 targets.mind 存在
         (async () => {
             set('Checking ./targets.mind …');
             try {
@@ -97,102 +81,72 @@
                 const buf = await r.arrayBuffer();
                 log(`OK, size=${(buf.byteLength / 1024).toFixed(1)} KB`);
             } catch (e) {
-                log('❌ 無法讀取 targets.mind（路徑或檔案問題）→ 白畫面常見原因');
-                log(String(e));
+                log('❌ 無法讀取 targets.mind（路徑/檔名）', String(e));
             }
         })();
 
-        // 2) 建立色盤（保證 5 色不重複）
         const PALETTE = ['#e74c3c', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6', '#e67e22', '#1abc9c', '#e84393', '#16a085', '#d35400'];
-        function pickDistinct(n) { const pool = [...PALETTE], out = []; for (let i = 0; i < n; i++) { out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]); } return out; }
-        const colors = pickDistinct(5);
+        const colors = (() => { const p = [...PALETTE], out = []; for (let i = 0; i < 5; i++) out.push(p.splice(Math.floor(Math.random() * p.length), 1)[0]); return out; })();
 
-        // 3) MindAR 事件與 target 行為（found 才 create，lost 就 remove）
         const sceneEl = document.querySelector('a-scene');
         const targets = Array.from(document.querySelectorAll('[mindar-image-target]'));
         const spawned = new Array(5).fill(null);
-        const visibleState = new Array(5).fill(false);
-
-        // 在 iOS/Safari 有時需要使用者手勢啟動，做一顆 Start 按鈕保險
-        const startBtn = document.getElementById('startBtn');
-        startBtn.onclick = async () => {
-            try {
-                set('Starting AR…');
-                await sceneEl.systems['mindar-image-system'].start();
-                log('✅ AR started');
-                startBtn.remove();
-            } catch (e) {
-                log('❌ start 失敗：', e);
-            }
-        };
-
-        sceneEl.addEventListener('loaded', () => {
-            log('A-Frame loaded');
-            // MindAR lifecycle
-            sceneEl.addEventListener('arReady', () => log('✅ arReady（相機/管線啟動）'));
-            sceneEl.addEventListener('arError', (e) => log('❌ arError：', e && e.detail ? e.detail : 'unknown'));
-
-            // 綁定 target found/lost
-            targets.forEach((t, idx) => {
-                t.addEventListener('targetFound', () => {
-                    visibleState[idx] = true;
-                    log(`found #${idx}`);
-                    // 動態生成球（若尚未生成）
-                    if (!spawned[idx]) {
-                        const s = document.createElement('a-sphere');
-                        s.setAttribute('position', '0 0 -0.08'); // 圖片正前方 8cm
-                        s.setAttribute('radius', '0.035');
-                        s.setAttribute('segments-width', '32');
-                        s.setAttribute('segments-height', '32');
-                        s.setAttribute('material', `color: ${colors[idx]}`);
-                        t.appendChild(s);
-                        spawned[idx] = s;
-                    }
-                });
-                t.addEventListener('targetLost', () => {
-                    visibleState[idx] = false;
-                    log(`lost  #${idx}`);
-                    if (spawned[idx]) { spawned[idx].remove(); spawned[idx] = null; }
-                });
-            });
-        });
-
-        // 自動嘗試啟動：有些瀏覽器可以自動成功，失敗也有 Start 按鈕兜底
-        window.addEventListener('load', async () => {
-            try {
-                set('Booting… autoStart try');
-                await sceneEl.systems['mindar-image-system'].start();
-                log('✅ autoStart 成功');
-                startBtn.remove();
-            } catch (e) {
-                log('ℹ️ autoStart 被阻擋（正常），請點 Start AR');
-            }
-        });
-
-        // 4) 裝置與相機可用性（額外提示）
-        navigator.mediaDevices?.getUserMedia({ video: true })
-            .then(() => log('✅ 瀏覽器允許相機（測試用）'))
-            .catch(err => log('⚠️ 相機權限被拒/無法取得：', err && err.name));
-
 
         let started = false;
         async function tryStart() {
             if (started) return;
+            const sys = sceneEl.systems && sceneEl.systems['mindar-image-system'];
+            if (!sys) { log('⌛ system 尚未就緒，稍後再試'); return; }
             started = true;
             set('Starting AR…');
             try {
-                await sceneEl.systems['mindar-image-system'].start();
+                await sys.start();
                 log('✅ AR started');
-                startBtn.remove();
+                document.getElementById('startBtn').remove();
             } catch (e) {
                 started = false;
                 log('❌ start 失敗：', e);
             }
         }
-        startBtn.onclick = tryStart;
 
-        // 萬一下不到按鈕，也可點任意處啟動一次
-        document.addEventListener('click', tryStart, { once: true });
+        // 只在 scene fully loaded 後再綁事件與啟動
+        sceneEl.addEventListener('loaded', () => {
+            log('A-Frame loaded');
+
+            // MindAR 狀態（僅顯示，不呼叫 start）
+            sceneEl.addEventListener('arReady', () => log('✅ arReady（管線啟動）'));
+            sceneEl.addEventListener('arError', e => log('❌ arError：', e?.detail || 'unknown'));
+
+            // 目標 found/lost
+            targets.forEach((t, idx) => {
+                t.addEventListener('targetFound', () => {
+                    log(`found #${idx}`);
+                    if (!spawned[idx]) {
+                        const s = document.createElement('a-sphere');
+                        s.setAttribute('position', '0 0 -0.08');
+                        s.setAttribute('radius', '0.035');
+                        s.setAttribute('segments-width', '32');
+                        s.setAttribute('segments-height', '32');
+                        s.setAttribute('material', `color:${colors[idx]}`);
+                        t.appendChild(s);
+                        spawned[idx] = s;
+                    }
+                });
+                t.addEventListener('targetLost', () => {
+                    log(`lost  #${idx}`);
+                    if (spawned[idx]) { spawned[idx].remove(); spawned[idx] = null; }
+                });
+            });
+
+            // 綁一次啟動入口（按鈕 & 任意點一下）
+            document.getElementById('startBtn').onclick = tryStart;
+            document.addEventListener('click', tryStart, { once: true });
+        });
+
+        // 額外測相機權限
+        navigator.mediaDevices?.getUserMedia({ video: true })
+            .then(() => log('✅ 瀏覽器允許相機（測試用）'))
+            .catch(err => log('⚠️ 相機權限被拒/無法取得：', err?.name));
     </script>
 </body>
 
