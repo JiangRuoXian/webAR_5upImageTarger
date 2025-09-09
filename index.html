@@ -35,17 +35,29 @@
         }
 
         #startBtn {
-            margin-top: 6px;
-            padding: 6px 10px;
-            border-radius: 10px;
-            border: 0;
-            cursor: pointer
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            padding: 14px 24px;
+            background: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 12px;
+            z-index: 1000;
+            cursor: pointer;
         }
     </style>
+
+
+
 </head>
 
 <body>
     <div id="hud">Booting…</div>
+
+    <button id="startBtn">▶ Start AR</button>
 
     <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: false"
         renderer="colorManagement: true; physicallyCorrectLights: true; alpha: true" embedded
@@ -91,19 +103,18 @@
         const visibleState = new Array(5).fill(false);
 
         // 在 iOS/Safari 有時需要使用者手勢啟動，做一顆 Start 按鈕保險
-        const startBtn = document.createElement('button');
-        startBtn.id = 'startBtn';
-        startBtn.textContent = 'Start AR';
+        const startBtn = document.getElementById('startBtn');
         startBtn.onclick = async () => {
             try {
                 set('Starting AR…');
-                await sceneEl.systems['mindar-image-system'].start(); // 手動啟動
+                await sceneEl.systems['mindar-image-system'].start();
                 log('✅ AR started');
                 startBtn.remove();
             } catch (e) {
                 log('❌ start 失敗：', e);
             }
         };
+
         hud.appendChild(startBtn);
 
         sceneEl.addEventListener('loaded', () => {
