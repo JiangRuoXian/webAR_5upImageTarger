@@ -78,7 +78,7 @@
 
         // 讀檔檢查
         (async () => {
-            set('Checking ./targets.mind …0.7');
+            set('Checking ./targets.mind …0.7.1');
             try {
                 const r = await fetch('./targets.mind', { cache: 'no-store' });
                 if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -167,6 +167,82 @@
         navigator.mediaDevices?.getUserMedia({ video: true })
             .then(() => log('✅ 瀏覽器允許相機（測試用）'))
             .catch(err => log('⚠️ 相機權限被拒/無法取得：', err?.name));
+
+        // ===== Camera Debug & Fix =====
+        (function cameraDebug() {
+            const hud = document.getElementById('hud');
+
+            function line(...a) { hud.textContent += '\n' + a.join(' '); console.log(...a); }
+
+            // 找 MindAR 內部 video（常見 id/class）
+            function findMindARVideo() {
+                return document.querySelector('#mindar-image-video, video.mindar-video, video#mindar-video, a-scene video') || null;
+            }
+
+            // 顯示目前 video 狀態
+            function dumpVideo(tag, v) {
+                if (!v) { line(`${tag}: (no video element)`); return; }
+                const st = v.readyState; // 0~4
+                const track = v.srcObject && v.srcObject.getVideoTracks ? v.srcObject.getVideoTracks()[0] : null;
+                const dims = track && track.getSettings ? track.getSettings() : {};
+                line(`${tag}: readyState=${st}, videoWidth=${v.videoWidth}, videoHeight=${v.videoHeight}`);
+                if (track) {
+                    line(`${tag}: track label="${track.label || ''}", facingMode=${dims.facingMode || '?'}, w=${dims.width || '?'} h=${dims.height || '?'} enabled=${track.enabled} muted=${v.muted}`);
+                }
+            }
+
+            // 加兩個按鈕到 HUD：Fix Camera / Preview Camera
+            const fixBtn = document.createElement('button');
+            fixBtn.textContent = 'Fix Camera';
+            Object.assign(fixBtn.style, { marginTop: '6px', padding: '6px 10px', borderRadius: '8px', border: '0', cursor: 'pointer' });
+            hud.appendChild(fixBtn);
+
+            const prevBtn = document.createElement('button');
+            prevBtn.textContent = 'Preview Camera';
+            Object.assign(prevBtn.style, { marginLeft: '6px', padding: '6px 10px', borderRadius: '8px', border: '0', cursor: 'pointer' });
+            hud.appendChild(prevBtn);
+
+            // 1) 修復：嘗試讓 MindAR 的 video 播放
+            fixBtn.onclick = async () => {
+                const v = findMindARVideo();
+                dumpVideo('Before fix', v);
+                if (!v) { line('❌ 找不到 MindAR video'); return; }
+                try {
+                    v.muted = true;             // 行動裝置手勢後允許自動播放
+                    v.playsInline = true;       // iOS 避免全螢幕
+                    await v.play();
+                    line('✅ video.play() 已呼叫');
+                    setTimeout(() => dumpVideo('After fix (0.5s)', v), 500);
+                    setTimeout(() => dumpVideo('After fix (2s)', v), 2000);
+                } catch (e) {
+                    line('❌ video.play() 失敗：', String(e));
+                }
+            };
+
+            // 2) 額外預覽：直接用 getUserMedia 開一個小視窗看相機是否正常
+            let previewEl = null;
+            prevBtn.onclick = async () => {
+                try {
+                    if (!previewEl) {
+                        previewEl = document.createElement('video');
+                        Object.assign(previewEl.style, {
+                            position: 'fixed', right: '8px', bottom: '8px', width: '160px', height: '120px',
+                            background: '#222', zIndex: 99999, border: '1px solid #555', borderRadius: '8px'
+                        });
+                        previewEl.muted = true; previewEl.autoplay = true; previewEl.playsInline = true;
+                        document.body.appendChild(previewEl);
+                    }
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+                    previewEl.srcObject = stream;
+                    line('✅ getUserMedia 預覽開啟');
+                } catch (e) {
+                    line('❌ getUserMedia 失敗：', e && e.name ? e.name : String(e));
+                }
+            };
+
+            // 自動列印一次狀態（若有找到）
+            setTimeout(() => dumpVideo('Initial', findMindARVideo()), 800);
+        })();
     </script>
 </body>
 
