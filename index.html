@@ -3,11 +3,11 @@
 
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>MindAR Camera Test</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Minimal WebAR Camera — Debug</title>
     <style>
-        body,
-        html {
+        html,
+        body {
             margin: 0;
             height: 100%;
             background: #000;
@@ -19,51 +19,139 @@
             left: 10px;
             top: 10px;
             z-index: 10;
-            background: rgba(0, 0, 0, .6);
             color: #fff;
-            padding: 6px 8px
+            background: rgba(0, 0, 0, .65);
+            padding: 8px 10px;
+            border-radius: 10px;
+            font: 13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+            white-space: pre-wrap
         }
 
-        #startBtn {
+        #btn {
             position: fixed;
             left: 50%;
             top: 50%;
             transform: translate(-50%, -50%);
-            padding: 10px 20px;
+            padding: 12px 20px;
             font-size: 20px;
+            border: 0;
+            border-radius: 12px;
             background: #28a745;
             color: #fff;
-            border: none;
-            border-radius: 8px
+            cursor: pointer;
+            z-index: 10;
+            touch-action: manipulation;
+            user-select: none
+        }
+
+        canvas {
+            display: block
         }
     </style>
+
+    <!-- ========== ① 請二選一：CDN 或 本地檔 ==========
+       A. 如果你用 CDN（網路別擋） -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-three.prod.js"></script>
+
+    <!-- B. 如果你用本地檔，改成下面兩行（並刪上面兩行）
+  <script src="./libs/three.min.js"></script>
+  <script src="./libs/mindar-image-three.prod.js"></script>
+  -->
 </head>
 
 <body>
-    <div id="hud">狀態：等待啟動</div>
-    <button id="startBtn">▶ Start AR</button>
+    <div id="hud">Booting…</div>
+    <button id="btn">▶ Start AR</button>
+
     <script>
-        const hud = document.getElementById("hud");
-        let started = false;
+        const hud = document.getElementById('hud');
+        const log = (...a) => { hud.textContent += '\\n' + a.join(' '); console.log(...a); };
+        const set = (t) => { hud.textContent = t; console.log(t); };
 
-        async function startAR() {
-            if (started) return; started = true;
-            hud.textContent = "狀態：啟動中…";
+        // 開場自檢：是否載到 THREE / MINDAR
+        window.addEventListener('load', () => {
+            set('Booting…');
+            log('THREE =', typeof window.THREE);
+            log('MINDAR =', typeof window.MINDAR);
+            log('MINDAR.IMAGE =', window.MINDAR && typeof window.MINDAR.IMAGE);
+            if (!window.THREE) log('❌ THREE 沒載到（檢查 <script> 路徑/網路）');
+            if (!window.MINDAR || !window.MINDAR.IMAGE) log('❌ MINDAR three 版沒載到（要 mindar-image-three.prod.js）');
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                log('⚠️ 需要 HTTPS 或 localhost 才能用相機');
+            }
+        });
 
-            const mindarThree = new window.MINDAR.IMAGE.MindARThree({
-                container: document.body
-            });
-            const { renderer, scene, camera } = mindarThree;
-            scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
-            await mindarThree.start();
-            hud.textContent = "狀態：相機已啟動 ✔";
-            document.getElementById("startBtn").remove();
-            renderer.setAnimationLoop(() => { renderer.render(scene, camera); });
+        async function requestCameraOnce() {
+            // 先用 getUserMedia 取一次流，確保權限 OK，再立刻關掉
+            try {
+                log('要求相機權限（預檢）…');
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+                const track = stream.getVideoTracks()[0];
+                log('✅ 預檢成功：', track.label || '(無裝置名稱)');
+                track.stop(); // 關掉預檢流
+                return true;
+            } catch (e) {
+                log('❌ 相機預檢失敗：', e.name || e.message || e);
+                return false;
+            }
         }
 
-        document.getElementById("startBtn").onclick = startAR;
+        let started = false;
+        async function startAR() {
+            if (started) return; started = true;
+            set('啟動中…');
+
+            // 先預檢相機，避免 start() 卡住
+            const ok = await requestCameraOnce();
+            if (!ok) { set('失敗：瀏覽器未授權或無相機'); started = false; return; }
+
+            // 建立 MindARThree（不放 targets 也會有相機背景）
+            if (!window.MINDAR || !window.MINDAR.IMAGE) {
+                set('失敗：MINDAR three 版未載入（檢查檔案來源）');
+                started = false; return;
+            }
+
+            const mindarThree = new window.MINDAR.IMAGE.MindARThree({
+                container: document.body,
+                captureMode: 'environment' // 後鏡頭
+                // 如要測圖片，之後加：imageTargetSrc: './targets.mind'
+            });
+
+            const { renderer, scene, camera } = mindarThree;
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.0));
+
+            try {
+                log('▶ 呼叫 mindarThree.start() …');
+                await mindarThree.start();
+                set('已啟動 ✔（應看到相機）');
+                document.getElementById('btn')?.remove();
+
+                // 顯示一下 MindAR 生成的 <video> 狀態
+                setTimeout(() => {
+                    const v = document.querySelector('video');
+                    if (!v) { log('⚠️ 找不到 video 元素'); return; }
+                    const track = v.srcObject && v.srcObject.getVideoTracks ? v.srcObject.getVideoTracks()[0] : null;
+                    log('🎥 video.readyState =', v.readyState, 'paused =', v.paused);
+                    if (track) {
+                        const st = track.getSettings?.() || {};
+                        log('🎛 track settings =', JSON.stringify(st));
+                    }
+                }, 300);
+
+                renderer.setAnimationLoop(() => renderer.render(scene, camera));
+            } catch (e) {
+                set('失敗：' + (e && (e.message || e)));
+                started = false;
+                log('👉 常見原因：1) 檔案沒載到（CDN 被擋/路徑錯） 2) 非 HTTPS 3) 裝置/瀏覽器不支援');
+            }
+        }
+
+        const btn = document.getElementById('btn');
+        const go = (ev) => { ev.preventDefault(); ev.stopPropagation(); startAR(); };
+        btn.addEventListener('click', go, { passive: false });
+        btn.addEventListener('pointerdown', go, { passive: false });
+        document.addEventListener('pointerdown', e => { if (!started) go(e); }, { once: true });
     </script>
 </body>
 
