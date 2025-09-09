@@ -4,14 +4,21 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-    <title>MindAR (Three.js) 測試</title>
+    <title>Minimal Camera — with Three & MindAR loaded</title>
     <style>
-        body,
-        html {
+        html,
+        body {
             margin: 0;
             height: 100%;
             background: #000;
-            overflow: hidden;
+            overflow: hidden
+        }
+
+        video {
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            display: block
         }
 
         #hud {
@@ -19,10 +26,11 @@
             left: 10px;
             top: 10px;
             z-index: 10;
-            color: #fff;
             background: rgba(0, 0, 0, .6);
+            color: #fff;
             padding: 8px 10px;
-            border-radius: 8px;
+            border-radius: 10px;
+            font: 14px/1.4 system-ui, Roboto, Arial
         }
 
         #startBtn {
@@ -32,63 +40,61 @@
             transform: translate(-50%, -50%);
             padding: 12px 20px;
             font-size: 20px;
+            border: 0;
+            border-radius: 10px;
             background: #28a745;
             color: #fff;
-            border: none;
-            border-radius: 8px;
             cursor: pointer;
+            z-index: 10;
+            touch-action: manipulation;
+            user-select: none
         }
     </style>
 
-    <!-- Three.js -->
+    <!-- 只「載入」這兩支檔案，不使用它們；用來驗證不會影響相機 -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.min.js"></script>
-    <!-- MindAR Three -->
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-three.prod.js"></script>
 </head>
 
 <body>
-    <div id="hud">狀態：尚未啟動<br>偵測：<span id="names">—</span></div>
-    <button id="startBtn">▶ Start</button>
+    <video id="v" autoplay playsinline muted></video>
+    <div id="hud">狀態：尚未啟動</div>
+    <button id="startBtn">▶ 開啟相機</button>
 
     <script>
-        const names = ["圖1", "圖2", "圖3", "圖4", "圖5"];
-        let started = false;
+        const v = document.getElementById('v');
+        const hud = document.getElementById('hud');
+        const btn = document.getElementById('startBtn');
+        const log = (t) => { hud.textContent = '狀態：' + t; console.log(t); };
 
-        async function startAR() {
-            if (started) return; started = true;
-            const hud = document.getElementById("hud");
-            const namesEl = document.getElementById("names");
-
-            const mindarThree = new window.MINDAR.IMAGE.MindARThree({
-                container: document.body,
-                imageTargetSrc: "./targets.mind"
-            });
-            const { renderer, scene, camera } = mindarThree;
-
-            // 設光
-            scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
-
-            // Anchor + 名稱顯示
-            const visible = new Array(names.length).fill(false);
-            const refresh = () => {
-                const list = names.filter((_, i) => visible[i]);
-                namesEl.textContent = list.length ? list.join(", ") : "—";
-            };
-
-            const anchors = names.map((_, i) => mindarThree.addAnchor(i));
-            anchors.forEach((a, i) => {
-                a.onTargetFound = () => { visible[i] = true; refresh(); };
-                a.onTargetLost = () => { visible[i] = false; refresh(); };
-            });
-
-            await mindarThree.start();
-            hud.firstChild.nodeValue = "狀態：已啟動\n";
-            document.getElementById("startBtn").remove();
-
-            renderer.setAnimationLoop(() => { renderer.render(scene, camera); });
+        async function startCamera() {
+            try {
+                log('請求相機權限…');
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: 'environment' } }, audio: false
+                });
+                v.srcObject = stream;
+                await v.play().catch(() => { }); // iOS 需手勢已滿足
+                log('✅ 相機已啟動');
+                btn.remove();
+            } catch (e) {
+                log('❌ 相機啟動失敗：' + (e.name || e.message || e));
+            }
         }
 
-        document.getElementById("startBtn").onclick = startAR;
+        // 按鈕啟動（行動裝置需要使用者手勢）
+        const go = (e) => { e.preventDefault(); e.stopPropagation(); startCamera(); };
+        btn.addEventListener('click', go, { passive: false });
+        btn.addEventListener('pointerdown', go, { passive: false });
+
+        // 如果已是安全環境且瀏覽器允許，嘗試自動啟動；失敗就等按鈕
+        if (location.protocol === 'https:' || location.hostname === 'localhost') {
+            navigator.permissions?.query?.({ name: 'camera' }).then(p => {
+                if (p.state === 'granted') startCamera();
+            });
+        } else {
+            log('⚠️ 需要 HTTPS 或 localhost 才能使用相機');
+        }
     </script>
 </body>
 
