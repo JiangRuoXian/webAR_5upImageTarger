@@ -59,15 +59,14 @@
 
     <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: false"
         renderer="colorManagement: true; physicallyCorrectLights: true; alpha: true" embedded
-        vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: true">
-        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+        vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: true"></a-scene>
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-        <a-entity mindar-image-target="targetIndex: 0"></a-entity>
-        <a-entity mindar-image-target="targetIndex: 1"></a-entity>
-        <a-entity mindar-image-target="targetIndex: 2"></a-entity>
-        <a-entity mindar-image-target="targetIndex: 3"></a-entity>
-        <a-entity mindar-image-target="targetIndex: 4"></a-entity>
-    </a-scene>
+    <a-entity mindar-image-target="targetIndex: 0"></a-entity>
+    <a-entity mindar-image-target="targetIndex: 1"></a-entity>
+    <a-entity mindar-image-target="targetIndex: 2"></a-entity>
+    <a-entity mindar-image-target="targetIndex: 3"></a-entity>
+    <a-entity mindar-image-target="targetIndex: 4"></a-entity>
 
     <script>
         const hud = document.getElementById('hud');
@@ -78,7 +77,7 @@
 
         // 讀檔檢查
         (async () => {
-            set('Checking ./targets.mind …0.7.2');
+            set('Checking ./targets.mind …0.7.4');
             try {
                 const r = await fetch('./targets.mind', { cache: 'no-store' });
                 if (!r.ok) throw new Error('HTTP ' + r.status);
