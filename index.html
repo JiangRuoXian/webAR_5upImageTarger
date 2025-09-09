@@ -76,9 +76,17 @@
     </a-scene>
 
     <script>
+        const VERSION = "v0.0.3"; // ← 每次你改檔案就手動調整
+
         const hud = document.getElementById('hud');
-        const log = (...args) => { hud.textContent += '\n' + args.join(' '); console.log(...args); };
-        const set = (text) => { hud.textContent = text; console.log(text); };
+        const log = (...args) => {
+            hud.textContent += '\n' + `[${VERSION}] ` + args.join(' ');
+            console.log(`[${VERSION}]`, ...args);
+        };
+        const set = (text) => {
+            hud.textContent = `[${VERSION}] ` + text;
+            console.log(`[${VERSION}]`, text);
+        };
 
         // 1) 先測試 targets.mind 是否能被取到（路徑錯誤會白畫面）
         (async () => {
