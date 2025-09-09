@@ -3,247 +3,51 @@
 
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-    <title>MindAR 5 Targets — Debug</title>
-
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Camera Test</title>
     <style>
-        html,
         body {
             margin: 0;
-            height: 100%;
-            overflow: hidden;
             background: #000;
         }
 
-        #hud {
-            position: fixed;
-            left: 8px;
-            top: 8px;
-            z-index: 10;
-            max-width: min(92vw, 600px);
-            background: rgba(0, 0, 0, .65);
-            color: #fff;
-            padding: 10px 12px;
-            border-radius: 12px;
-            font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial;
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-
-        #startBtn {
-            position: fixed;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 24px;
-            padding: 14px 24px;
-            background: #28a745;
-            color: #fff;
-            border: 0;
-            border-radius: 12px;
-            z-index: 2147483647;
-            pointer-events: auto;
-            cursor: pointer;
-            touch-action: manipulation;
-            user-select: none;
+        video {
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
         }
     </style>
 </head>
 
 <body>
-    <div id="hud">Booting…</div>
-    <button id="startBtn">▶ Start AR</button>
-
-    <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: false"
-        renderer="colorManagement: true; physicallyCorrectLights: true; alpha: true" embedded
-        vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: true"></a-scene>
-    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-
-    <a-entity mindar-image-target="targetIndex: 0"></a-entity>
-    <a-entity mindar-image-target="targetIndex: 1"></a-entity>
-    <a-entity mindar-image-target="targetIndex: 2"></a-entity>
-    <a-entity mindar-image-target="targetIndex: 3"></a-entity>
-    <a-entity mindar-image-target="targetIndex: 4"></a-entity>
+    <video id="video" autoplay playsinline muted></video>
+    <div id="hud" style="
+    position:fixed;top:10px;left:10px;
+    background:rgba(0,0,0,.6);color:#fff;
+    padding:6px 10px;border-radius:8px;font:14px monospace;">
+        Booting...
+    </div>
 
     <script>
         const hud = document.getElementById('hud');
-        const startBtn = document.getElementById('startBtn');
-        const sceneEl = document.querySelector('a-scene');
-        const log = (...a) => { hud.textContent += '\n' + a.join(' '); console.log(...a); };
-        const set = (t) => { hud.textContent = t; console.log(t); };
+        const log = (msg) => { hud.textContent = msg; console.log(msg); };
 
-        // 讀檔檢查
-        (async () => {
-            set('Checking ./targets.mind …0.7.4');
+        async function initCamera() {
             try {
-                const r = await fetch('./targets.mind', { cache: 'no-store' });
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                const buf = await r.arrayBuffer();
-                log(`OK, size=${(buf.byteLength / 1024).toFixed(1)} KB`);
+                log("要求相機權限...");
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { ideal: "environment" } }, // 嘗試後鏡頭
+                    audio: false
+                });
+                const video = document.getElementById('video');
+                video.srcObject = stream;
+                log("✅ 相機啟動成功");
             } catch (e) {
-                log('❌ 無法讀取 targets.mind：', String(e));
+                log("❌ 相機啟動失敗: " + e.name + " / " + e.message);
             }
-        })();
-
-        // 啟動器（唯一版本）
-        let starting = false, started = false, pollId = null;
-
-        if (!window.MINDAR) {
-            log('❌ MINDAR 未載入（請檢查 CDN 路徑或改用本地檔）');
-        }
-        async function waitAndStart() {
-            if (starting || started) return;
-            starting = true;
-            set('Starting AR…（等待系統就緒）');
-            log('👆 click received, polling…');
-
-            pollId = setInterval(async () => {
-                const aframeReady = !!window.AFRAME;
-                const sceneReady = !!(sceneEl && sceneEl.hasLoaded);
-                const sys = sceneEl?.systems?.['mindar-image-system'];
-
-                if (!aframeReady) { log('⌛ AFRAME 尚未載入…'); return; }
-                if (!sceneReady) { log('⌛ scene 尚未 loaded…'); return; }
-                if (!sys) { log('⌛ mindar-image-system 尚未就緒…'); return; }
-
-                clearInterval(pollId);
-                try {
-                    await sys.start();
-                    started = true;
-                    log('✅ AR started');
-                    startBtn.remove();
-                } catch (e) {
-                    starting = false;
-                    log('❌ start 失敗：', e);
-                }
-            }, 200);
         }
 
-        // 手勢事件：一開始就綁
-        const gesture = ev => { try { ev.stopPropagation(); ev.preventDefault(); } catch (_) { } waitAndStart(); };
-        startBtn.addEventListener('click', gesture, { passive: false });
-        startBtn.addEventListener('pointerdown', gesture, { passive: false });
-        startBtn.addEventListener('touchend', gesture, { passive: false });
-        document.addEventListener('pointerdown', () => { if (!started) waitAndStart(); }, { once: true });
-
-        // 色盤 + 目標
-        const PALETTE = ['#e74c3c', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6', '#e67e22', '#1abc9c', '#e84393', '#16a085', '#d35400'];
-        const colors = (() => { const p = [...PALETTE], out = []; for (let i = 0; i < 5; i++) out.push(p.splice(Math.floor(Math.random() * p.length), 1)[0]); return out; })();
-        const targets = Array.from(document.querySelectorAll('[mindar-image-target]'));
-        const spawned = new Array(5).fill(null);
-
-        // scene loaded 後再綁 found/lost 與狀態提示（不呼叫 start）
-        sceneEl.addEventListener('loaded', () => {
-            log('A-Frame loaded');
-            sceneEl.addEventListener('arReady', () => log('✅ arReady（管線啟動）'));
-            sceneEl.addEventListener('arError', e => log('❌ arError：', e?.detail || 'unknown'));
-
-            targets.forEach((t, idx) => {
-                t.addEventListener('targetFound', () => {
-                    log(`found #${idx}`);
-                    if (!spawned[idx]) {
-                        const s = document.createElement('a-sphere');
-                        s.setAttribute('position', '0 0 -0.08');
-                        s.setAttribute('radius', '0.035');
-                        s.setAttribute('segments-width', '32');
-                        s.setAttribute('segments-height', '32');
-                        s.setAttribute('material', `color:${colors[idx]}`);
-                        t.appendChild(s);
-                        spawned[idx] = s;
-                    }
-                });
-                t.addEventListener('targetLost', () => {
-                    log(`lost  #${idx}`);
-                    if (spawned[idx]) { spawned[idx].remove(); spawned[idx] = null; }
-                });
-            });
-        });
-
-        // 抓全域錯誤
-        window.addEventListener('error', e => log('🧯 window.onerror:', e.message));
-        window.addEventListener('unhandledrejection', e => log('🧯 unhandledrejection:', String(e.reason)));
-
-        // 額外測相機權限
-        navigator.mediaDevices?.getUserMedia({ video: true })
-            .then(() => log('✅ 瀏覽器允許相機（測試用）'))
-            .catch(err => log('⚠️ 相機權限被拒/無法取得：', err?.name));
-
-        // === Camera Preview + Force Bind to MindAR ===
-        (function () {
-            const hud = document.getElementById('hud');
-            const sceneEl = document.querySelector('a-scene');
-            const log = (...a) => { hud.textContent += '\n' + a.join(' '); console.log(...a); };
-
-            // 1) UI
-            const prevBtn = document.createElement('button');
-            prevBtn.textContent = 'Preview Camera';
-            Object.assign(prevBtn.style, { marginTop: '6px', padding: '6px 10px', borderRadius: '8px', border: '0', cursor: 'pointer' });
-            hud.appendChild(prevBtn);
-
-            const bindBtn = document.createElement('button');
-            bindBtn.textContent = 'Bind Preview → MindAR';
-            Object.assign(bindBtn.style, { marginLeft: '6px', padding: '6px 10px', borderRadius: '8px', border: '0', cursor: 'pointer' });
-            hud.appendChild(bindBtn);
-
-            // 2) 開一個預覽 <video>
-            let previewEl = null;
-            prevBtn.onclick = async () => {
-                try {
-                    if (!previewEl) {
-                        previewEl = document.createElement('video');
-                        previewEl.id = 'previewCam';
-                        Object.assign(previewEl.style, {
-                            position: 'fixed', right: '8px', bottom: '8px', width: '160px', height: '120px',
-                            background: '#222', zIndex: 99999, border: '1px solid #555', borderRadius: '8px'
-                        });
-                        previewEl.muted = true; previewEl.autoplay = true; previewEl.playsInline = true;
-                        document.body.appendChild(previewEl);
-                    }
-                    const stream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: { ideal: 'environment' } }, audio: false
-                    });
-                    previewEl.srcObject = stream;
-                    await previewEl.play().catch(() => { });
-                    log('✅ Preview 開啟：', 'videoWidth=', previewEl.videoWidth, 'videoHeight=', previewEl.videoHeight);
-                } catch (e) {
-                    log('❌ getUserMedia 失敗：', e && e.name ? e.name : String(e));
-                }
-            };
-
-            // 3) 把預覽 <video> 強制指定給 MindAR 的 system
-            bindBtn.onclick = async () => {
-                try {
-                    const sys = sceneEl.systems && sceneEl.systems['mindar-image-system'];
-                    if (!sys) { log('❌ mindar-image-system 尚未就緒'); return; }
-                    if (!previewEl || !previewEl.srcObject) { log('❌ 沒有可用的預覽影片流，先按 Preview Camera'); return; }
-
-                    // 若 MindAR 裡沒有 video，就直接塞我們的
-                    sys.video = previewEl;
-
-                    // 如果已有 VideoTexture，改它的來源；若沒有就創一個
-                    const THREE = window.THREE || window.AFRAME?.THREE;
-                    if (!THREE) { log('❌ THREE 未載入'); return; }
-                    if (sys.videoTexture) {
-                        sys.videoTexture.image = previewEl;
-                        sys.videoTexture.needsUpdate = true;
-                    } else {
-                        sys.videoTexture = new THREE.VideoTexture(previewEl);
-                        sys.videoTexture.minFilter = THREE.LinearFilter;
-                        sys.videoTexture.magFilter = THREE.LinearFilter;
-                        sys.videoTexture.format = THREE.RGBFormat;
-                    }
-
-                    // 有些機型需要再觸發一次 play
-                    try { await previewEl.play(); } catch (_) { }
-                    log('✅ 已將 Preview 綁定給 MindAR（若仍黑，請移動到 target 圖片試試）');
-                } catch (e) {
-                    log('❌ 綁定失敗：', String(e));
-                }
-            };
-        })();
+        initCamera();
     </script>
 </body>
 
