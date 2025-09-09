@@ -3,115 +3,96 @@
 
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>MindAR Loader Diagnose</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Minimal WebAR Camera (ESM)</title>
     <style>
         html,
         body {
             margin: 0;
             height: 100%;
             background: #000;
-            color: #fff;
-            font: 14px/1.5 system-ui, Segoe UI, Roboto, Helvetica, Arial
+            overflow: hidden
         }
 
         #hud {
-            white-space: pre-wrap;
-            padding: 12px
+            position: fixed;
+            left: 10px;
+            top: 10px;
+            z-index: 10;
+            background: rgba(0, 0, 0, .65);
+            color: #fff;
+            padding: 8px 10px;
+            border-radius: 10px;
+            font: 14px/1.4 system-ui, Roboto, Arial
         }
 
-        #btn {
+        #startBtn {
             position: fixed;
             left: 50%;
             top: 50%;
             transform: translate(-50%, -50%);
-            padding: 10px 18px;
-            font-size: 18px;
+            padding: 12px 20px;
+            font-size: 20px;
             border: 0;
             border-radius: 10px;
             background: #28a745;
-            color: #fff
+            color: #fff;
+            cursor: pointer;
+            z-index: 10;
+            touch-action: manipulation;
+            user-select: none
+        }
+
+        canvas {
+            display: block
         }
     </style>
-
-    <!-- 一定要先載 three（同步、非 defer） -->
-    <script src="./libs/three.min.js"></script>
-
-    <script>
-        const hud = (m) => { document.getElementById('hud').textContent += m + "\n"; console.log(m); };
-
-        async function main() {
-            document.getElementById('hud').textContent = "Booting…\n";
-            hud("STEP 0  環境檢查：");
-            hud("  typeof THREE = " + typeof window.THREE);
-
-            // STEP 1：先用 fetch 檢查本地檔是否存在 & 內容是否像 JS
-            hud("\nSTEP 1  檢查 ./libs/mindar-image-three.prod.js 是否可讀…");
-            try {
-                const r = await fetch("./libs/mindar-image-three.prod.js", { cache: "no-store" });
-                hud("  HTTP = " + r.status);
-                const text = await r.text();
-                hud("  size = " + text.length + " chars");
-                hud("  sniff (前 80 字) = " + text.slice(0, 80).replace(/\n/g, "\\n"));
-                // 若這裡開頭出現 "<!doctype html>" 或 "<html" 就是 404/HTML，被存錯檔
-            } catch (e) {
-                hud("  ❌ 無法 fetch 本地檔：" + e);
-            }
-
-            // STEP 2：實際插入 <script>（本地→jsDelivr→unpkg 後備載入）
-            hud("\nSTEP 2  動態載入 MindAR three 版…");
-            const sources = [
-                "./libs/mindar-image-three.prod.js",
-                "https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-three.prod.js",
-                "https://unpkg.com/mind-ar@1.2.2/dist/mindar-image-three.prod.js",
-            ];
-            let ok = false;
-            for (const src of sources) {
-                hud("  嘗試：" + src);
-                /* eslint-disable no-await-in-loop */
-                ok = await new Promise(res => {
-                    const s = document.createElement("script");
-                    s.src = src;
-                    s.onload = () => { hud("    ✔ onload"); res(true); };
-                    s.onerror = () => { hud("    ✖ onerror"); res(false); };
-                    document.head.appendChild(s);
-                });
-                if (ok) break;
-            }
-            hud("  typeof MINDAR = " + typeof window.MINDAR);
-            hud("  typeof MINDAR?.IMAGE = " + (window.MINDAR ? typeof window.MINDAR.IMAGE : "n/a"));
-
-            if (!ok || !window.MINDAR || !window.MINDAR.IMAGE) {
-                hud("\n➡ 結論：MindAR three 版仍未載入成功。常見原因：\n" +
-                    "  • 路徑/大小寫錯：確認 index.html 與 libs/ 的相對位置；GitHub Pages 大小寫敏感\n" +
-                    "  • 檔案內容不是 JS：看 STEP 1 的 sniff 是否像 HTML（代表存到 404 頁）\n" +
-                    "  • CDN 被擋：本地 OK、CDN 失敗屬正常；若本地也失敗就是路徑或檔案錯\n");
-                return;
-            }
-
-            // STEP 3：按鈕啟動 WebAR 相機（只驗證能否啟相機）
-            const btn = document.createElement("button");
-            btn.id = "btn"; btn.textContent = "▶ Start AR";
-            btn.onclick = async () => {
-                btn.disabled = true;
-                hud("\nSTEP 3  啟動 MindARThree，相機應顯示在背景…");
-                const engine = new MINDAR.IMAGE.MindARThree({ container: document.body, captureMode: "environment" });
-                const { renderer, scene, camera } = engine;
-                scene.add(new THREE.HemisphereLight(0xffffff, 0x222, 1));
-                try {
-                    await engine.start();
-                    hud("  ✅ 相機啟動成功");
-                    renderer.setAnimationLoop(() => renderer.render(scene, camera));
-                    btn.remove();
-                } catch (e) { hud("  ❌ 啟動失敗：" + (e.message || e)); btn.disabled = false; }
-            };
-            document.body.appendChild(btn);
-        }
-    </script>
 </head>
 
-<body onload="main()">
-    <pre id="hud">Booting…</pre>
+<body>
+    <div id="hud">狀態：等待啟動</div>
+    <button id="startBtn">▶ Start AR</button>
+
+    <!-- 關鍵：用 ES Module 載入 -->
+    <script type="module">
+        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.module.js';
+        import { MindARThree } from 'https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-three.module.js';
+
+        const hud = document.getElementById('hud');
+        const set = (t) => hud.textContent = '狀態：' + t;
+
+        let started = false;
+        async function startAR() {
+            if (started) return; started = true;
+            set('啟動中…');
+
+            // 這裡先不放 targets，只驗證相機與渲染循環
+            const mindarThree = new MindARThree({
+                container: document.body,
+                captureMode: 'environment'    // 優先後鏡頭
+                // imageTargetSrc: './targets.mind'  // 之後要偵測時再加
+            });
+            const { renderer, scene, camera } = mindarThree;
+
+            // 簡單補光（非必要）
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.0));
+
+            await mindarThree.start();      // 需要使用者手勢
+            set('相機已啟動 ✔');
+            document.getElementById('startBtn')?.remove();
+
+            renderer.setAnimationLoop(() => renderer.render(scene, camera));
+        }
+
+        const go = (e) => { e.preventDefault(); e.stopPropagation(); startAR().catch(err => set('失敗：' + (err?.message || err))); };
+        document.getElementById('startBtn').addEventListener('click', go, { passive: false });
+        document.addEventListener('pointerdown', (e) => { if (!started) go(e); }, { once: true });
+
+        // HTTPS 提醒
+        if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+            set('需要 HTTPS 或 localhost 才能存取相機');
+        }
+    </script>
 </body>
 
 </html>
