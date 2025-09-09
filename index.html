@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-    <title>Minimal Camera — with Three & MindAR loaded</title>
+    <title>Minimal WebAR Camera (MindAR + Three)</title>
     <style>
         html,
         body {
@@ -12,13 +12,6 @@
             height: 100%;
             background: #000;
             overflow: hidden
-        }
-
-        video {
-            width: 100vw;
-            height: 100vh;
-            object-fit: cover;
-            display: block
         }
 
         #hud {
@@ -41,7 +34,7 @@
             padding: 12px 20px;
             font-size: 20px;
             border: 0;
-            border-radius: 10px;
+            border-radius: 12px;
             background: #28a745;
             color: #fff;
             cursor: pointer;
@@ -49,51 +42,65 @@
             touch-action: manipulation;
             user-select: none
         }
+
+        canvas {
+            display: block
+        }
+
+        /* MindAR/Three 會自動插入 canvas 與 video */
     </style>
 
-    <!-- 只「載入」這兩支檔案，不使用它們；用來驗證不會影響相機 -->
+    <!-- 你可以用本地檔 (./libs/three.min.js / mindar-image-three.prod.js)；
+       若要 CDN，示範如下（若被擋就改成本地檔） -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-three.prod.js"></script>
 </head>
 
 <body>
-    <video id="v" autoplay playsinline muted></video>
-    <div id="hud">狀態：尚未啟動</div>
-    <button id="startBtn">▶ 開啟相機</button>
+    <div id="hud">狀態：等待啟動</div>
+    <button id="startBtn">▶ Start AR</button>
 
     <script>
-        const v = document.getElementById('v');
         const hud = document.getElementById('hud');
-        const btn = document.getElementById('startBtn');
-        const log = (t) => { hud.textContent = '狀態：' + t; console.log(t); };
+        const setStatus = (t) => hud.textContent = '狀態：' + t;
 
-        async function startCamera() {
-            try {
-                log('請求相機權限…');
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: 'environment' } }, audio: false
-                });
-                v.srcObject = stream;
-                await v.play().catch(() => { }); // iOS 需手勢已滿足
-                log('✅ 相機已啟動');
-                btn.remove();
-            } catch (e) {
-                log('❌ 相機啟動失敗：' + (e.name || e.message || e));
-            }
+        let started = false;
+        async function startWebAR() {
+            if (started) return; started = true;
+            setStatus('啟動中…');
+
+            // 1) 建立 MindARThree（僅管理相機與管線；先不放 targets 也能看到相機）
+            const mindarThree = new window.MINDAR.IMAGE.MindARThree({
+                container: document.body,             // 把 video/canvas 加到 <body>
+                captureMode: 'environment',           // 優先使用後鏡頭
+                // 若之後要圖片偵測，直接加上 imageTargetSrc: './targets.mind'
+            });
+
+            // 2) 取出 three.js 物件（就算不放模型，也需要 render loop）
+            const { renderer, scene, camera } = mindarThree;
+
+            // 3)（可選）加一點環境光，方便之後丟模型時看得到
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.0));
+
+            // 4) 啟動 AR（需要使用者手勢觸發）
+            await mindarThree.start();
+
+            // 5) 基礎 render 迴圈（此時背景就是相機畫面）
+            renderer.setAnimationLoop(() => { renderer.render(scene, camera); });
+
+            // 6) UI 狀態
+            setStatus('已啟動 ✔（你現在看到的是 WebAR 相機）');
+            document.getElementById('startBtn')?.remove();
         }
 
-        // 按鈕啟動（行動裝置需要使用者手勢）
-        const go = (e) => { e.preventDefault(); e.stopPropagation(); startCamera(); };
-        btn.addEventListener('click', go, { passive: false });
-        btn.addEventListener('pointerdown', go, { passive: false });
+        // 綁手勢（行動裝置需要點擊）
+        const go = e => { e.preventDefault(); e.stopPropagation(); startWebAR().catch(err => setStatus('失敗：' + (err?.message || err))); };
+        document.getElementById('startBtn').addEventListener('click', go, { passive: false });
+        document.addEventListener('pointerdown', e => { if (!started) go(e); }, { once: true });
 
-        // 如果已是安全環境且瀏覽器允許，嘗試自動啟動；失敗就等按鈕
-        if (location.protocol === 'https:' || location.hostname === 'localhost') {
-            navigator.permissions?.query?.({ name: 'camera' }).then(p => {
-                if (p.state === 'granted') startCamera();
-            });
-        } else {
-            log('⚠️ 需要 HTTPS 或 localhost 才能使用相機');
+        // 小提醒：需要 HTTPS / localhost 才能用相機
+        if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+            setStatus('需要 HTTPS 或 localhost 才能存取相機');
         }
     </script>
 </body>
