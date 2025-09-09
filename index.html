@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <title>MindAR 5 Targets Demo</title>
+
+    <!-- A-Frame 與 MindAR（A-Frame 版本） -->
+    <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar-js@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #ui {
+            position: fixed;
+            left: 8px;
+            bottom: 8px;
+            z-index: 10;
+            background: rgba(0, 0, 0, .55);
+            color: #fff;
+            padding: 8px 10px;
+            border-radius: 10px;
+            font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">Targets found: <span id="count">0</span><br>Last: <span id="last">—</span></div>
+
+    <!-- mindar-image：載入 5 張 target 的 .mind -->
+    <a-scene mindar-image="imageTargetSrc: ./targets.mind; autoStart: true" embedded color-space="sRGB"
+        renderer="colorManagement: true, physicallyCorrectLights: true, alpha: true" vr-mode-ui="enabled: false"
+        device-orientation-permission-ui="enabled: true">
+
+        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+        <!-- 5 個 target 容器（targetIndex 0~4） -->
+        <a-entity mindar-image-target="targetIndex: 0">
+            <!-- 球放在 marker 前方（-Z 為朝向相機的前方） -->
+            <a-sphere id="ball-0" position="0 0 -0.08" radius="0.035" segments-width="32" segments-height="32"
+                visible="false"></a-sphere>
+        </a-entity>
+
+        <a-entity mindar-image-target="targetIndex: 1">
+            <a-sphere id="ball-1" position="0 0 -0.08" radius="0.035" segments-width="32" segments-height="32"
+                visible="false"></a-sphere>
+        </a-entity>
+
+        <a-entity mindar-image-target="targetIndex: 2">
+            <a-sphere id="ball-2" position="0 0 -0.08" radius="0.035" segments-width="32" segments-height="32"
+                visible="false"></a-sphere>
+        </a-entity>
+
+        <a-entity mindar-image-target="targetIndex: 3">
+            <a-sphere id="ball-3" position="0 0 -0.08" radius="0.035" segments-width="32" segments-height="32"
+                visible="false"></a-sphere>
+        </a-entity>
+
+        <a-entity mindar-image-target="targetIndex: 4">
+            <a-sphere id="ball-4" position="0 0 -0.08" radius="0.035" segments-width="32" segments-height="32"
+                visible="false"></a-sphere>
+        </a-entity>
+    </a-scene>
+
+    <script>
+        // ===== 讓 5 顆球顏色「隨機但互不相同」 =====
+        // 作法：從一個高對比色盤中「隨機抽 5 色」不重複
+        const PALETTE = [
+            '#e74c3c', '#f1c40f', '#2ecc71', '#3498db', '#9b59b6',
+            '#e67e22', '#1abc9c', '#e84393', '#16a085', '#d35400'
+        ];
+        function pickDistinct(n) {
+            const pool = [...PALETTE];
+            const out = [];
+            for (let i = 0; i < n; i++) {
+                const k = Math.floor(Math.random() * pool.length);
+                out.push(pool.splice(k, 1)[0]);
+            }
+            return out;
+        }
+        const colors = pickDistinct(5);
+
+        // 指到每顆球
+        const balls = [
+            document.querySelector('#ball-0'),
+            document.querySelector('#ball-1'),
+            document.querySelector('#ball-2'),
+            document.querySelector('#ball-3'),
+            document.querySelector('#ball-4')
+        ];
+        // 指到每個 target 容器（用來監聽 found/lost）
+        const targets = Array.from(document.querySelectorAll('[mindar-image-target]'));
+
+        // UI
+        const uiCount = document.querySelector('#count');
+        const uiLast = document.querySelector('#last');
+        const visibleState = [false, false, false, false, false];
+
+        // 綁定事件
+        targets.forEach((t, idx) => {
+            const ball = balls[idx];
+            // 預先套上顏色
+            ball.setAttribute('material', 'color', colors[idx]);
+
+            t.addEventListener('targetFound', () => {
+                visibleState[idx] = true;
+                ball.setAttribute('visible', true);
+                uiLast.textContent = `#${idx}`;
+                uiCount.textContent = visibleState.filter(Boolean).length;
+            });
+
+            t.addEventListener('targetLost', () => {
+                visibleState[idx] = false;
+                ball.setAttribute('visible', false);
+                uiCount.textContent = visibleState.filter(Boolean).length;
+            });
+        });
+
+        // ❗座標說明：
+        // 在 MindAR（A-Frame）的 target 本地座標中，-Z 軸朝向相機。
+        // 所以把球放在 position="0 0 -0.08" 就是「在圖片正前方 8 公分」。
+        // 想更近/更遠，調整 -0.08 的數值即可。
+    </script>
+</body>
+
+</html>
