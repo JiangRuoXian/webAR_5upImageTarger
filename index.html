@@ -45,7 +45,10 @@
             color: #fff;
             border: none;
             border-radius: 12px;
-            z-index: 1000;
+            /* 超高層級，確保在最上層 */
+            z-index: 2147483647;
+            /* 可以點擊 */
+            pointer-events: auto;
             cursor: pointer;
         }
     </style>
@@ -115,8 +118,6 @@
             }
         };
 
-        hud.appendChild(startBtn);
-
         sceneEl.addEventListener('loaded', () => {
             log('A-Frame loaded');
             // MindAR lifecycle
@@ -165,6 +166,25 @@
             .then(() => log('✅ 瀏覽器允許相機（測試用）'))
             .catch(err => log('⚠️ 相機權限被拒/無法取得：', err && err.name));
 
+
+        let started = false;
+        async function tryStart() {
+            if (started) return;
+            started = true;
+            set('Starting AR…');
+            try {
+                await sceneEl.systems['mindar-image-system'].start();
+                log('✅ AR started');
+                startBtn.remove();
+            } catch (e) {
+                started = false;
+                log('❌ start 失敗：', e);
+            }
+        }
+        startBtn.onclick = tryStart;
+
+        // 萬一下不到按鈕，也可點任意處啟動一次
+        document.addEventListener('click', tryStart, { once: true });
     </script>
 </body>
 
