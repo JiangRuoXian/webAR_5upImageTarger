@@ -3,11 +3,11 @@
 
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-    <title>Minimal WebAR Camera (MindAR + Three)</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MindAR Camera Test</title>
     <style>
-        html,
-        body {
+        body,
+        html {
             margin: 0;
             height: 100%;
             background: #000;
@@ -21,9 +21,7 @@
             z-index: 10;
             background: rgba(0, 0, 0, .6);
             color: #fff;
-            padding: 8px 10px;
-            border-radius: 10px;
-            font: 14px/1.4 system-ui, Roboto, Arial
+            padding: 6px 8px
         }
 
         #startBtn {
@@ -31,27 +29,14 @@
             left: 50%;
             top: 50%;
             transform: translate(-50%, -50%);
-            padding: 12px 20px;
+            padding: 10px 20px;
             font-size: 20px;
-            border: 0;
-            border-radius: 12px;
             background: #28a745;
             color: #fff;
-            cursor: pointer;
-            z-index: 10;
-            touch-action: manipulation;
-            user-select: none
+            border: none;
+            border-radius: 8px
         }
-
-        canvas {
-            display: block
-        }
-
-        /* MindAR/Three 會自動插入 canvas 與 video */
     </style>
-
-    <!-- 你可以用本地檔 (./libs/three.min.js / mindar-image-three.prod.js)；
-       若要 CDN，示範如下（若被擋就改成本地檔） -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-three.prod.js"></script>
 </head>
@@ -59,49 +44,26 @@
 <body>
     <div id="hud">狀態：等待啟動</div>
     <button id="startBtn">▶ Start AR</button>
-
     <script>
-        const hud = document.getElementById('hud');
-        const setStatus = (t) => hud.textContent = '狀態：' + t;
-
+        const hud = document.getElementById("hud");
         let started = false;
-        async function startWebAR() {
+
+        async function startAR() {
             if (started) return; started = true;
-            setStatus('啟動中…');
+            hud.textContent = "狀態：啟動中…";
 
-            // 1) 建立 MindARThree（僅管理相機與管線；先不放 targets 也能看到相機）
             const mindarThree = new window.MINDAR.IMAGE.MindARThree({
-                container: document.body,             // 把 video/canvas 加到 <body>
-                captureMode: 'environment',           // 優先使用後鏡頭
-                // 若之後要圖片偵測，直接加上 imageTargetSrc: './targets.mind'
+                container: document.body
             });
-
-            // 2) 取出 three.js 物件（就算不放模型，也需要 render loop）
             const { renderer, scene, camera } = mindarThree;
-
-            // 3)（可選）加一點環境光，方便之後丟模型時看得到
-            scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.0));
-
-            // 4) 啟動 AR（需要使用者手勢觸發）
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
             await mindarThree.start();
-
-            // 5) 基礎 render 迴圈（此時背景就是相機畫面）
+            hud.textContent = "狀態：相機已啟動 ✔";
+            document.getElementById("startBtn").remove();
             renderer.setAnimationLoop(() => { renderer.render(scene, camera); });
-
-            // 6) UI 狀態
-            setStatus('已啟動 ✔（你現在看到的是 WebAR 相機）');
-            document.getElementById('startBtn')?.remove();
         }
 
-        // 綁手勢（行動裝置需要點擊）
-        const go = e => { e.preventDefault(); e.stopPropagation(); startWebAR().catch(err => setStatus('失敗：' + (err?.message || err))); };
-        document.getElementById('startBtn').addEventListener('click', go, { passive: false });
-        document.addEventListener('pointerdown', e => { if (!started) go(e); }, { once: true });
-
-        // 小提醒：需要 HTTPS / localhost 才能用相機
-        if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-            setStatus('需要 HTTPS 或 localhost 才能存取相機');
-        }
+        document.getElementById("startBtn").onclick = startAR;
     </script>
 </body>
 
