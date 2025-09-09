@@ -3,51 +3,92 @@
 
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Camera Test</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>MindAR (Three.js) 測試</title>
     <style>
-        body {
+        body,
+        html {
             margin: 0;
+            height: 100%;
             background: #000;
+            overflow: hidden;
         }
 
-        video {
-            width: 100vw;
-            height: 100vh;
-            object-fit: cover;
+        #hud {
+            position: fixed;
+            left: 10px;
+            top: 10px;
+            z-index: 10;
+            color: #fff;
+            background: rgba(0, 0, 0, .6);
+            padding: 8px 10px;
+            border-radius: 8px;
+        }
+
+        #startBtn {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            padding: 12px 20px;
+            font-size: 20px;
+            background: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
         }
     </style>
+
+    <!-- Three.js -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.min.js"></script>
+    <!-- MindAR Three -->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-three.prod.js"></script>
 </head>
 
 <body>
-    <video id="video" autoplay playsinline muted></video>
-    <div id="hud" style="
-    position:fixed;top:10px;left:10px;
-    background:rgba(0,0,0,.6);color:#fff;
-    padding:6px 10px;border-radius:8px;font:14px monospace;">
-        Booting...
-    </div>
+    <div id="hud">狀態：尚未啟動<br>偵測：<span id="names">—</span></div>
+    <button id="startBtn">▶ Start</button>
 
     <script>
-        const hud = document.getElementById('hud');
-        const log = (msg) => { hud.textContent = msg; console.log(msg); };
+        const names = ["圖1", "圖2", "圖3", "圖4", "圖5"];
+        let started = false;
 
-        async function initCamera() {
-            try {
-                log("要求相機權限...");
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: "environment" } }, // 嘗試後鏡頭
-                    audio: false
-                });
-                const video = document.getElementById('video');
-                video.srcObject = stream;
-                log("✅ 相機啟動成功");
-            } catch (e) {
-                log("❌ 相機啟動失敗: " + e.name + " / " + e.message);
-            }
+        async function startAR() {
+            if (started) return; started = true;
+            const hud = document.getElementById("hud");
+            const namesEl = document.getElementById("names");
+
+            const mindarThree = new window.MINDAR.IMAGE.MindARThree({
+                container: document.body,
+                imageTargetSrc: "./targets.mind"
+            });
+            const { renderer, scene, camera } = mindarThree;
+
+            // 設光
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
+
+            // Anchor + 名稱顯示
+            const visible = new Array(names.length).fill(false);
+            const refresh = () => {
+                const list = names.filter((_, i) => visible[i]);
+                namesEl.textContent = list.length ? list.join(", ") : "—";
+            };
+
+            const anchors = names.map((_, i) => mindarThree.addAnchor(i));
+            anchors.forEach((a, i) => {
+                a.onTargetFound = () => { visible[i] = true; refresh(); };
+                a.onTargetLost = () => { visible[i] = false; refresh(); };
+            });
+
+            await mindarThree.start();
+            hud.firstChild.nodeValue = "狀態：已啟動\n";
+            document.getElementById("startBtn").remove();
+
+            renderer.setAnimationLoop(() => { renderer.render(scene, camera); });
         }
 
-        initCamera();
+        document.getElementById("startBtn").onclick = startAR;
     </script>
 </body>
 
