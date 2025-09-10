@@ -121,6 +121,50 @@
             border: 1px solid #444;
             margin: 0 4px 4px 0;
         }
+
+        #targetsPanel {
+            position: fixed;
+            right: 12px;
+            bottom: 12px;
+            z-index: 4;
+            display: none;
+            /* 點按鈕才打開 */
+            background: rgba(0, 0, 0, .8);
+            border: 1px solid #888;
+            border-radius: 10px;
+            padding: 10px;
+            max-width: 40vw;
+            max-height: 40vh;
+            overflow: auto;
+        }
+
+        #targetsPanel .item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        #targetsPanel img {
+            width: 120px;
+            height: auto;
+            border-radius: 6px;
+            border: 1px solid #444;
+        }
+
+        #targetsPanel .idx {
+            font: 12px/1.2 monospace;
+            color: #ccc;
+            padding: 2px 6px;
+            border: 1px solid #555;
+            border-radius: 6px;
+        }
+
+        #log {
+            display: block;
+        }
+
+        /* ← 讓 log 面板預設常駐 */
     </style>
 </head>
 
@@ -130,8 +174,11 @@
     <div id="toolbar">
         <button id="btnStart">Start AR</button>
         <button id="btnToggleDebug">Toggle Debug</button>
+        <button id="btnShowTargets">Show Targets</button>
         <button id="btnRetry">Retry</button>
     </div>
+
+    <div id="targetsPanel"></div>
 
     <div id="status"></div>
     <div id="log"></div>
@@ -154,6 +201,15 @@
         const MAX_TRACK = 5;
         const COLORS = [0xff5555, 0x55ff55, 0x5599ff, 0xffcc33, 0xcc66ff]; // 每個 target 的球色
         const ENABLE_AXES = true; // 每個 target 顯示小座標軸
+
+        // 依「編譯時上傳順序」填入原始圖的網址或相對路徑：0..4
+        const TARGET_IMAGES = [
+            './img/1.png',
+            './img/2.png',
+            './img/3.png',
+            './img/4.png',
+            './img/5.png',
+        ];
 
         // ====== DOM 便捷 ======
         const $ = (sel) => document.querySelector(sel);
@@ -180,7 +236,8 @@
         function toggleDebug(force) {
             const show = (typeof force === 'boolean') ? force : (statusEl.style.display === 'none');
             statusEl.style.display = show ? 'block' : 'none';
-            logEl.style.display = show ? 'block' : 'none';
+            // 保持 log 常駐
+            if (logEl.style.display !== 'block') logEl.style.display = 'block';
         }
         // URL ?debug=1 自動打開
         if (new URLSearchParams(location.search).get('debug') === '1') toggleDebug(true);
@@ -282,7 +339,7 @@
             log('開始 start()…（若卡住，查看瀏覽器是否彈出相機權限視窗）');
 
             try {
-                await mindarThree.start({ autoStart: false }); // 明確控制
+                await mindarThree.start(); // 明確控制
             } catch (err) {
                 started = false;
                 overlayEl.style.display = 'grid';
@@ -329,7 +386,7 @@
         // ====== 綁定 UI ======
         btnStart.addEventListener('click', startAR);
         btnStartOverlay.addEventListener('click', startAR);
-        btnDebug.addEventListener('click', () => toggleDebug());
+        // btnDebug.addEventListener('click', () => toggleDebug());
         btnRetry.addEventListener('click', retry);
 
         // 預檢 + 建立場景
@@ -339,6 +396,37 @@
             // 若使用者帶 ?debug=1，自動開啟面板
             if (new URLSearchParams(location.search).get('debug') === '1') toggleDebug(true);
         })();
+
+        const btnShowTargets = $('#btnShowTargets');
+        const targetsPanel = $('#targetsPanel');
+
+        // 建立圖庫清單（依 TARGET_IMAGES）
+        function buildTargetsPanel() {
+            targetsPanel.innerHTML = '<div style="color:#fff;margin-bottom:6px;">Targets Preview (順序 = index)</div>';
+            TARGET_IMAGES.forEach((src, i) => {
+                const row = document.createElement('div');
+                row.className = 'item';
+                row.innerHTML = `
+      <span class="idx">#${i}</span>
+      <img src="${src}" alt="target_${i}">
+      <span style="color:#aaa">${src}</span>
+    `;
+                targetsPanel.appendChild(row);
+            });
+        }
+
+        // 顯示/隱藏圖庫
+        function toggleTargetsPanel() {
+            if (!targetsPanel.hasChildNodes()) buildTargetsPanel();
+            targetsPanel.style.display = (targetsPanel.style.display === 'none' || !targetsPanel.style.display)
+                ? 'block' : 'none';
+        }
+
+        // 綁定
+        btnShowTargets.addEventListener('click', toggleTargetsPanel);
+
+        // 另外，讓 debug 面板仍可手動切：但 log 已預設顯示
+        btnDebug.addEventListener('click', () => toggleDebug());
     </script>
 </body>
 
