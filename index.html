@@ -4,12 +4,13 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-    <title>MindAR 5 Targets — Debug Build</title>
+    <title>MindAR — Clean 5 Targets</title>
+
     <!-- 先載入 Three.js（與 v1.1.5 相容的 r137） -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.137.5/build/three.min.js"></script>
-
-    <!-- 非模組版（已內建 three）-->
+    <!-- 再載入 MindAR 非模組版 -->
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.5/dist/mindar-image-three.prod.js"></script>
+
     <style>
         html,
         body {
@@ -24,418 +25,78 @@
             inset: 0;
         }
 
-        #toolbar {
-            position: fixed;
-            left: 12px;
-            top: 12px;
-            display: flex;
-            gap: 8px;
-            z-index: 3;
-        }
-
-        #toolbar button {
-            background: #222;
-            color: #fff;
-            border: 1px solid #444;
-            border-radius: 8px;
-            padding: 8px 12px;
-            cursor: pointer;
-        }
-
-        #status {
-            position: fixed;
-            right: 12px;
-            top: 12px;
-            z-index: 3;
-            min-width: 280px;
-            max-width: 40vw;
-            color: #0f0;
-            font: 12px/1.4 monospace;
-            background: rgba(0, 0, 0, .65);
-            border: 1px solid #0f0;
-            border-radius: 10px;
-            padding: 10px;
-            display: none;
-            white-space: pre-wrap;
-            overflow: auto;
-            max-height: 80vh;
-        }
-
-        #log {
-            position: fixed;
-            left: 12px;
-            bottom: 12px;
-            z-index: 3;
-            width: 40vw;
-            max-width: 520px;
-            color: #0ff;
-            font: 12px/1.4 monospace;
-            background: rgba(0, 0, 0, .65);
-            border: 1px solid #0ff;
-            border-radius: 10px;
-            padding: 10px;
-            display: none;
-            white-space: pre-wrap;
-            overflow: auto;
-            max-height: 35vh;
-        }
-
-        #overlay {
+        #start {
             position: fixed;
             inset: 0;
-            display: grid;
-            place-items: center;
-            gap: 8px;
-            z-index: 5;
-            background: radial-gradient(ellipse at center, rgba(0, 0, 0, .7) 0%, rgba(0, 0, 0, .9) 100%);
-            color: #fff;
-            text-align: center;
-            padding: 24px;
-        }
-
-        #overlay button {
-            padding: 10px 16px;
-            font-size: 16px;
+            margin: auto;
+            width: 180px;
+            height: 48px;
             border-radius: 10px;
             border: 0;
+            font-size: 16px;
             cursor: pointer;
+            background: #222;
+            color: #fff;
         }
-
-        .muted {
-            color: #aaa
-        }
-
-        .ok {
-            color: #6f6
-        }
-
-        .warn {
-            color: #fc6
-        }
-
-        .err {
-            color: #f66
-        }
-
-        .chip {
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 6px;
-            border: 1px solid #444;
-            margin: 0 4px 4px 0;
-        }
-
-        #targetsPanel {
-            position: fixed;
-            right: 12px;
-            bottom: 12px;
-            z-index: 4;
-            display: none;
-            /* 點按鈕才打開 */
-            background: rgba(0, 0, 0, .8);
-            border: 1px solid #888;
-            border-radius: 10px;
-            padding: 10px;
-            max-width: 40vw;
-            max-height: 40vh;
-            overflow: auto;
-        }
-
-        #targetsPanel .item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 8px;
-        }
-
-        #targetsPanel img {
-            width: 120px;
-            height: auto;
-            border-radius: 6px;
-            border: 1px solid #444;
-        }
-
-        #targetsPanel .idx {
-            font: 12px/1.2 monospace;
-            color: #ccc;
-            padding: 2px 6px;
-            border: 1px solid #555;
-            border-radius: 6px;
-        }
-
-        #log {
-            display: block;
-        }
-
-        /* ← 讓 log 面板預設常駐 */
     </style>
 </head>
 
 <body>
     <div id="app"></div>
-
-    <div id="toolbar">
-        <button id="btnStart">Start AR</button>
-        <button id="btnToggleDebug">Toggle Debug</button>
-        <button id="btnShowTargets">Show Targets</button>
-        <button id="btnRetry">Retry</button>
-    </div>
-
-    <div id="targetsPanel"></div>
-
-    <div id="status"></div>
-    <div id="log"></div>
-
-    <div id="overlay">
-        <div>
-            <h2>MindAR Debug Demo（5 Targets）</h2>
-            <div id="precheck" class="muted">正在預檢環境…</div>
-            <p class="muted">請準備好你的 5 張 target 圖片（順序 = 編譯時上傳順序）</p>
-            <div style="margin-top:12px">
-                <button id="btnStartOverlay">允許使用相機並開始</button>
-            </div>
-            <div class="muted" style="margin-top:8px">若無反應，試按右上角「Toggle Debug」查看</div>
-        </div>
-    </div>
+    <button id="start">Start AR</button>
 
     <script>
-        // ====== 可調參數 ======
-        const TARGETS_PATH = './targets.mind'; // 放同目錄即可
-        const MAX_TRACK = 5;
-        const COLORS = [0xff5555, 0x55ff55, 0x5599ff, 0xffcc33, 0xcc66ff]; // 每個 target 的球色
-        const ENABLE_AXES = true; // 每個 target 顯示小座標軸
+        // ===== 可調參數（偵測不變） =====
+        const TARGETS_PATH = './targets.mind'; // 與本檔同資料夾
+        const MAX_TRACK = 5;                   // 同時追蹤 5 張
+        const COLORS = [0xff5555, 0x55ff55, 0x5599ff, 0xffcc33, 0xcc66ff]; // 五顆球顏色
 
-        // 依「編譯時上傳順序」填入原始圖的網址或相對路徑：0..4
-        const TARGET_IMAGES = [
-            './img/1.png',
-            './img/2.png',
-            './img/3.png',
-            './img/4.png',
-            './img/5.png',
-        ];
+        // ===== 基本初始化 =====
+        let mindarThree, renderer, scene, camera;
+        let started = false;
 
-        // ====== DOM 便捷 ======
-        const $ = (sel) => document.querySelector(sel);
-        const statusEl = $('#status');
-        const logEl = $('#log');
-        const overlayEl = $('#overlay');
-        const btnStart = $('#btnStart');
-        const btnStartOverlay = $('#btnStartOverlay');
-        const btnDebug = $('#btnToggleDebug');
-        const btnRetry = $('#btnRetry');
-        const precheckEl = $('#precheck');
-
-        // ====== 日誌 & 狀態 ======
-        const logs = [];
-        function log(...args) {
-            const line = args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ');
-            logs.push(line);
-            if (logEl.style.display !== 'none') logEl.textContent = logs.slice(-200).join('\n');
-            console.log('[LOG]', ...args);
-        }
-        function setStatus(txt) {
-            statusEl.textContent = txt;
-        }
-        function toggleDebug(force) {
-            const show = (typeof force === 'boolean') ? force : (statusEl.style.display === 'none');
-            statusEl.style.display = show ? 'block' : 'none';
-            // 保持 log 常駐
-            if (logEl.style.display !== 'block') logEl.style.display = 'block';
-        }
-        // URL ?debug=1 自動打開
-        if (new URLSearchParams(location.search).get('debug') === '1') toggleDebug(true);
-
-        // 全域錯誤攔截
-        window.addEventListener('error', (e) => {
-            log('[ERROR]', e.message, e.filename, e.lineno + ':' + e.colno);
-        });
-        window.addEventListener('unhandledrejection', (e) => {
-            log('[UNHANDLED REJECTION]', String(e.reason || e));
-        });
-
-        // ====== 啟動流程 ======
-        let mindarThree, renderer, scene, camera, anchors = [], started = false;
-        let fpsInfo = { last: performance.now(), frames: 0, fps: 0 };
-
-        // 預檢：HTTPS / 相機 / 檔案可讀
-        async function preflightCheck() {
-            const bits = [];
-            // 安全環境
-            if (!window.isSecureContext && location.hostname !== 'localhost') {
-                bits.push('❌ 非 HTTPS 安全環境（行動裝置相機可能無法開啟）');
-            } else {
-                bits.push('✅ 安全環境（HTTPS or localhost）');
-            }
-            // MediaDevices
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                bits.push('❌ 瀏覽器不支援相機 API');
-            } else {
-                bits.push('✅ 支援相機 API');
-                try {
-                    const devices = await navigator.mediaDevices.enumerateDevices();
-                    const cams = devices.filter(d => d.kind === 'videoinput');
-                    bits.push(`📷 可用相機：${cams.length} 台`);
-                } catch (err) {
-                    bits.push('⚠️ enumerateDevices 失敗（可能需權限）');
-                    log('enumerateDevices error:', err);
-                }
-            }
-            // 檔案是否可讀 + 檔案大小
-            try {
-                const res = await fetch(TARGETS_PATH, { method: 'GET' });
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const blob = await res.blob();
-                bits.push(`✅ 讀到 targets.mind（${(blob.size / 1024).toFixed(1)} KB）`);
-            } catch (err) {
-                bits.push(`❌ 無法讀取 ${TARGETS_PATH}（${String(err)}）`);
-                log('fetch targets.mind failed:', err);
-            }
-            bits.push(window.THREE ? '✅ THREE.js 已載入' : '❌ THREE.js 未載入');
-            bits.push(window.MINDAR && window.MINDAR.IMAGE ? '✅ MindAR 已載入' : '❌ MindAR 未載入');
-            precheckEl.innerHTML = bits.join('<br>');
-        }
-
-        // 建立場景 + 5 個 anchor
-        async function setupMindAR() {
-
-            if (!window.THREE) { log('THREE 未載入'); alert('Three.js 沒載到'); return; }
-            if (!window.MINDAR || !window.MINDAR.IMAGE) { log('MINDAR 未載入'); alert('MindAR 沒載到'); return; }
-
-            log('初始化 MindARThree…');
+        async function setup() {
             mindarThree = new window.MINDAR.IMAGE.MindARThree({
-                container: $('#app'),
+                container: document.querySelector('#app'),
                 imageTargetSrc: TARGETS_PATH,
                 maxTrack: MAX_TRACK,
             });
             ({ renderer, scene, camera } = mindarThree);
 
-            const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-            scene.add(hemi);
+            // 簡單光源
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
 
-            anchors = [];
+            // 建立 5 個 anchor，各放一顆小球
             for (let i = 0; i < MAX_TRACK; i++) {
                 const anchor = mindarThree.addAnchor(i);
-
                 const group = new THREE.Group();
-
-                const mat = new THREE.MeshStandardMaterial({ color: COLORS[i % COLORS.length], metalness: 0.0, roughness: 0.7 });
-                const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), mat);
-                mesh.position.set(0, 0.055, 0);
+                const mesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.05, 16, 16),
+                    new THREE.MeshStandardMaterial({ color: COLORS[i % COLORS.length], metalness: 0.0, roughness: 0.7 })
+                );
+                mesh.position.set(0, 0.055, 0); // 離平面一點避免 Z-fighting
                 group.add(mesh);
-
-                if (ENABLE_AXES) {
-                    const axes = new THREE.AxesHelper(0.15); // x=紅 y=綠 z=藍
-                    axes.position.set(0, 0.001, 0);
-                    group.add(axes);
-                }
-
                 anchor.group.add(group);
-
-                // 事件：found / lost
-                anchor.onTargetFound = () => log(`FOUND #${i}`);
-                anchor.onTargetLost = () => log(`LOST  #${i}`);
-
-                anchors.push(anchor);
             }
         }
 
-        // 以使用者手勢啟動（必要）
         async function startAR() {
             if (started) return;
             started = true;
-
-            overlayEl.style.display = 'none';
-            log('開始 start()…（若卡住，查看瀏覽器是否彈出相機權限視窗）');
-
+            document.getElementById('start').style.display = 'none';
             try {
-                await mindarThree.start(); // 明確控制
-            } catch (err) {
+                await mindarThree.start();
+            } catch (e) {
+                alert('啟動失敗：' + e);
                 started = false;
-                overlayEl.style.display = 'grid';
-                log('mindarThree.start() 失敗：', err);
-                alert('啟動失敗：' + err);
+                document.getElementById('start').style.display = 'block';
                 return;
             }
-
-            renderer.setAnimationLoop(() => {
-                renderer.render(scene, camera);
-                // FPS 計
-                fpsInfo.frames++;
-                const now = performance.now();
-                if (now - fpsInfo.last >= 1000) {
-                    fpsInfo.fps = fpsInfo.frames;
-                    fpsInfo.frames = 0;
-                    fpsInfo.last = now;
-                }
-                // 狀態面板
-                const lines = [];
-                lines.push(`FPS: ${fpsInfo.fps}`);
-                lines.push(`Anchors: ${anchors.length} / maxTrack=${MAX_TRACK}`);
-                for (let i = 0; i < anchors.length; i++) {
-                    const g = anchors[i].group;
-                    let pos = new THREE.Vector3();
-                    g.getWorldPosition(pos);
-                    // 與相機距離
-                    let camPos = new THREE.Vector3();
-                    camera.getWorldPosition(camPos);
-                    const dist = pos.distanceTo(camPos);
-                    lines.push(`[#${i}] visible=${g.visible ? 'Y' : 'N'}  pos=(${pos.x.toFixed(2)},${pos.y.toFixed(2)},${pos.z.toFixed(2)})  camDist=${dist.toFixed(2)}m`);
-                }
-                setStatus(lines.join('\n'));
-            });
-
-            log('start() 完成，開始追蹤。');
+            renderer.setAnimationLoop(() => renderer.render(scene, camera));
         }
 
-        // 重試（重新整理最乾脆）
-        function retry() {
-            location.reload();
-        }
-
-        // ====== 綁定 UI ======
-        btnStart.addEventListener('click', startAR);
-        btnStartOverlay.addEventListener('click', startAR);
-        // btnDebug.addEventListener('click', () => toggleDebug());
-        btnRetry.addEventListener('click', retry);
-
-        // 預檢 + 建立場景
-        (async function main() {
-            await preflightCheck();
-            await setupMindAR();
-            // 若使用者帶 ?debug=1，自動開啟面板
-            if (new URLSearchParams(location.search).get('debug') === '1') toggleDebug(true);
-        })();
-
-        const btnShowTargets = $('#btnShowTargets');
-        const targetsPanel = $('#targetsPanel');
-
-        // 建立圖庫清單（依 TARGET_IMAGES）
-        function buildTargetsPanel() {
-            targetsPanel.innerHTML = '<div style="color:#fff;margin-bottom:6px;">Targets Preview (順序 = index)</div>';
-            TARGET_IMAGES.forEach((src, i) => {
-                const row = document.createElement('div');
-                row.className = 'item';
-                row.innerHTML = `
-      <span class="idx">#${i}</span>
-      <img src="${src}" alt="target_${i}">
-      <span style="color:#aaa">${src}</span>
-    `;
-                targetsPanel.appendChild(row);
-            });
-        }
-
-        // 顯示/隱藏圖庫
-        function toggleTargetsPanel() {
-            if (!targetsPanel.hasChildNodes()) buildTargetsPanel();
-            targetsPanel.style.display = (targetsPanel.style.display === 'none' || !targetsPanel.style.display)
-                ? 'block' : 'none';
-        }
-
-        // 綁定
-        btnShowTargets.addEventListener('click', toggleTargetsPanel);
-
-        // 另外，讓 debug 面板仍可手動切：但 log 已預設顯示
-        btnDebug.addEventListener('click', () => toggleDebug());
+        document.getElementById('start').addEventListener('click', startAR);
+        setup();
     </script>
 </body>
 
