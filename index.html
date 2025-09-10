@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-    <title>MindAR — Clean 5 Targets + Progress</title>
+    <title>MindAR — Clean 5 Targets + Progress (Bigger Model)</title>
 
     <!-- Three.js（與 v1.1.5 相容的 r137） -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.137.5/build/three.min.js"></script>
@@ -93,9 +93,13 @@
 
     <script>
         // ===== 參數（偵測設定不變） =====
-        const TARGETS_PATH = './targets.mind';  // 與本檔同資料夾
-        const MAX_TRACK = 5;                    // 同時追蹤 5 張
+        const TARGETS_PATH = './targets.mind';   // 與本檔同資料夾
+        const MAX_TRACK = 5;                     // 同時追蹤 5 張
         const COLORS = [0xff5555, 0x55ff55, 0x5599ff, 0xffcc33, 0xcc66ff]; // 五顆球顏色
+
+        // ★ 模型大小（球半徑，單位：公尺）。需要更大/更小改這裡即可。
+        const BALL_RADIUS = 0.14;                // 原本 0.05 → 現在放大到 0.14
+        const BALL_HEIGHT = BALL_RADIUS + 0.005; // 離平面一點，避免 Z-fighting
 
         // ===== 內部變數 =====
         let mindarThree, renderer, scene, camera;
@@ -104,7 +108,7 @@
         const loadingEl = document.getElementById('loading');
         const progressEl = document.getElementById('progressText');
 
-        // 下載檔案並回報進度（支援 fetch stream；若無 Content-Length 則只在完成時跳到 100%）
+        // 下載檔案並回報進度
         async function fetchWithProgress(url, onProgress) {
             const res = await fetch(url, { method: 'GET' });
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -113,7 +117,6 @@
             const reader = res.body && res.body.getReader ? res.body.getReader() : null;
 
             if (!reader) {
-                // 環境不支援 ReadableStream：退化為一次到位
                 const blob = await res.blob();
                 onProgress && onProgress(100);
                 return blob;
@@ -154,27 +157,27 @@
                 });
                 ({ renderer, scene, camera } = mindarThree);
 
-                // 3) 場景與 5 個 anchors（每張圖一顆球）
+                // 3) 場景與 5 個 anchors（每張圖一顆更大的球）
                 scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
                 for (let i = 0; i < MAX_TRACK; i++) {
                     const anchor = mindarThree.addAnchor(i);
                     const group = new THREE.Group();
                     const mesh = new THREE.Mesh(
-                        new THREE.SphereGeometry(0.05, 16, 16),
+                        new THREE.SphereGeometry(BALL_RADIUS, 20, 20),
                         new THREE.MeshStandardMaterial({ color: COLORS[i % COLORS.length], metalness: 0.0, roughness: 0.7 })
                     );
-                    mesh.position.set(0, 0.055, 0);
+                    mesh.position.set(0, BALL_HEIGHT, 0);
                     group.add(mesh);
                     anchor.group.add(group);
                 }
 
-                // 4) 啟動追蹤（把%數補到 100）
+                // 4) 啟動追蹤
                 progressEl.textContent = '100%';
                 await mindarThree.start();
                 loadingEl.style.display = 'none';
                 renderer.setAnimationLoop(() => renderer.render(scene, camera));
 
-                // 釋放 Blob URL（非必要，但乾淨）
+                // 釋放 Blob URL
                 setTimeout(() => URL.revokeObjectURL(mindURL), 3000);
             } catch (e) {
                 loadingEl.style.display = 'none';
