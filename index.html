@@ -64,7 +64,7 @@
 
         // 確認腳本是否載到
         if (typeof window.THREE !== 'object') set('three.min.js 未載到');
-        if (!window.MINDAR || !window.MINDAR.IMAGE) set('mindar-image-three.prod.js 未載到');
+        if (!window.MINDAR) set('mindar-image-three.prod.js 未載到');
 
         let started = false;
         async function startAR() {
