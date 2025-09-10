@@ -4,101 +4,121 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-    <title>Minimal WebAR (ESM + importmap)</title>
+    <title>MindAR — 5 Targets Demo</title>
+    <!-- v1.1.5 非模組版（已內建 three）-->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.5/dist/mindar-image-three.prod.js"></script>
     <style>
         html,
         body {
             margin: 0;
             height: 100%;
+            overflow: hidden;
             background: #000;
-            overflow: hidden
         }
 
-        #hud {
+        #app {
+            width: 100%;
+            height: 100%;
             position: fixed;
-            left: 10px;
-            top: 10px;
-            z-index: 10;
-            background: rgba(0, 0, 0, .65);
-            color: #fff;
-            padding: 8px 10px;
-            border-radius: 10px;
-            font: 14px/1.4 system-ui, Roboto, Arial
+            inset: 0;
         }
 
-        #startBtn {
+        #log {
             position: fixed;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            padding: 12px 20px;
-            font-size: 20px;
-            border: 0;
-            border-radius: 10px;
-            background: #28a745;
-            color: #fff;
-            cursor: pointer;
-            z-index: 10;
-            touch-action: manipulation;
-            user-select: none
+            left: 8px;
+            bottom: 8px;
+            color: #0f0;
+            font: 12px/1.3 monospace;
+            background: rgba(0, 0, 0, .5);
+            padding: 6px 8px;
+            border-radius: 6px;
+            white-space: pre;
         }
 
-        canvas {
-            display: block
+        #start {
+            position: fixed;
+            inset: 0;
+            margin: auto;
+            width: 180px;
+            height: 48px;
+            border-radius: 8px;
+            font-size: 16px;
         }
     </style>
-
-    <!-- 將 ESM 的 "three" 映射到本地檔 -->
-    <script type="importmap">
-  {
-    "imports": {
-      "three": "./libs/three.module.js"
-    }
-  }
-  </script>
 </head>
 
 <body>
-    <div id="hud">狀態：等待啟動</div>
-    <button id="startBtn">▶ Start AR</button>
+    <div id="app"></div>
+    <button id="start">Start AR</button>
+    <div id="log">waiting…</div>
 
-    <!-- 用 ESM 寫法：直接 import 三方模組 -->
-    <script type="module">
-        import * as THREE from 'three';
-        // 從你剛放的本地資料夾載入 MindAR（ESM）
-        import { MindARThree } from './libs/mindar/mindar-image-three.prod.js';
+    <script>
+        (async () => {
+            const log = (m) => document.getElementById('log').textContent = m;
 
-        const hud = document.getElementById('hud');
-        const set = (t) => hud.textContent = '狀態：' + t;
-
-        let started = false;
-        async function startAR() {
-            if (started) return; started = true;
-            set('啟動中…');
-
-            const mindarThree = new MindARThree({
-                container: document.body,
-                captureMode: 'environment'   // 優先後鏡頭
-                // imageTargetSrc: './targets.mind'  // 之後要做圖片偵測再加
+            // 1) 建立 MindARThree（用非模組版全域 MINDAR / THREE）
+            const mindarThree = new window.MINDAR.IMAGE.MindARThree({
+                container: document.querySelector("#app"),
+                imageTargetSrc: "./targets.mind", // 你剛剛編譯出的檔案
+                maxTrack: 5,                      // 同時追蹤上限（預設2，這裡設5）
             });
 
             const { renderer, scene, camera } = mindarThree;
-            scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.0));
 
-            await mindarThree.start();      // 需要使用者手勢
-            set('相機已啟動 ✔');
-            document.getElementById('startBtn')?.remove();
+            // 2) 簡單光源
+            const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+            scene.add(light);
 
-            renderer.setAnimationLoop(() => renderer.render(scene, camera));
-        }
+            // 3) 為五張 target（index: 0..4）各自建立一個 Anchor + Mesh
+            const anchors = [];
+            for (let i = 0; i < 5; i++) {
+                const anchor = mindarThree.addAnchor(i);
 
-        const go = (e) => { e.preventDefault(); e.stopPropagation(); startAR().catch(err => set('失敗：' + (err?.message || err))); };
-        document.getElementById('startBtn').addEventListener('click', go, { passive: false });
-        document.addEventListener('pointerdown', (e) => { if (!started) go(e); }, { once: true });
+                // 每張圖上方放一個小球 + 文字
+                const group = new THREE.Group();
 
-        if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-            set('需要 HTTPS 或 localhost 才能使用相機');
-        }
+                const geo = new THREE.SphereGeometry(0.05, 16, 16);
+                const mat = new THREE.MeshStandardMaterial({ metalness: 0.1, roughness: 0.6 });
+                const sphere = new THREE.Mesh(geo, mat);
+                sphere.position.set(0, 0.05, 0); // 離平面一點，避免Z-fighting
+                group.add(sphere);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = 256; canvas.height = 64;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 256, 64);
+                ctx.fillStyle = '#0f0';
+                ctx.font = '28px monospace';
+                ctx.fillText('Target #' + i, 10, 42);
+                const tex = new THREE.CanvasTexture(canvas);
+                const label = new THREE.Mesh(
+                    new THREE.PlaneGeometry(0.28, 0.07),
+                    new THREE.MeshBasicMaterial({ map: tex, transparent: true })
+                );
+                label.position.set(0, 0.13, 0);
+                group.add(label);
+
+                anchor.group.add(group);
+
+                // Debug：找到/丟失事件
+                anchor.onTargetFound = () => log(`FOUND: #${i}`);
+                anchor.onTargetLost = () => log(`LOST : #${i}`);
+
+                anchors.push(anchor);
+            }
+
+            // 4) 點擊 Start 後才開相機（符合瀏覽器手勢規範）
+            const startBtn = document.getElementById('start');
+            startBtn.addEventListener('click', async () => {
+                startBtn.style.display = 'none';
+                await mindarThree.start();
+                renderer.setAnimationLoop(() => {
+                    renderer.render(scene, camera);
+                });
+                log('tracking… (show any of your 5 images)');
+            });
+
+        })();
     </script>
 </body>
 
