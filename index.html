@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-    <title>Minimal WebAR Camera (UMD)</title>
+    <title>Minimal WebAR (ESM + importmap)</title>
     <style>
         html,
         body {
@@ -48,41 +48,44 @@
         }
     </style>
 
-    <!-- 本地 three（必須先載） -->
-    <script src="./libs/three.min.js"></script>
-    <!-- 本地 MindAR（UMD）→ 會在 window.MINDAR 下面掛 API -->
-    <script src="./libs/mindar-image-three.prod.js"></script>
+    <!-- 將 ESM 的 "three" 映射到本地檔 -->
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "./libs/three.module.js"
+    }
+  }
+  </script>
 </head>
 
 <body>
     <div id="hud">狀態：等待啟動</div>
     <button id="startBtn">▶ Start AR</button>
 
-    <script>
+    <!-- 用 ESM 寫法：直接 import 三方模組 -->
+    <script type="module">
+        import * as THREE from 'three';
+        // 從你剛放的本地資料夾載入 MindAR（ESM）
+        import { MindARThree } from './libs/mindar/mindar-image-three.prod.js';
+
         const hud = document.getElementById('hud');
         const set = (t) => hud.textContent = '狀態：' + t;
-
-        // 確認腳本是否載到
-        if (typeof window.THREE !== 'object') set('three.min.js 未載到');
-        if (!window.MINDAR) set('mindar-image-three.prod.js 未載到');
 
         let started = false;
         async function startAR() {
             if (started) return; started = true;
             set('啟動中…');
 
-            // 用 UMD 寫法：從 window.MINDAR 取得 MindARThree
-            const mindarThree = new window.MINDAR.IMAGE.MindARThree({
+            const mindarThree = new MindARThree({
                 container: document.body,
-                captureMode: 'environment'     // 優先後鏡頭
-                // 之後要偵測圖片再加：imageTargetSrc: './targets.mind'
+                captureMode: 'environment'   // 優先後鏡頭
+                // imageTargetSrc: './targets.mind'  // 之後要做圖片偵測再加
             });
-            const { renderer, scene, camera } = mindarThree;
 
-            // 簡單補光（非必要）
+            const { renderer, scene, camera } = mindarThree;
             scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.0));
 
-            await mindarThree.start();       // 需要使用者手勢
+            await mindarThree.start();      // 需要使用者手勢
             set('相機已啟動 ✔');
             document.getElementById('startBtn')?.remove();
 
