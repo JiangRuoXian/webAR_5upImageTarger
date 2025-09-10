@@ -5,6 +5,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <title>MindAR 5 Targets — Debug Build</title>
+    <!-- 先載入 Three.js（與 v1.1.5 相容的 r137） -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.137.5/build/three.min.js"></script>
+
     <!-- 非模組版（已內建 three）-->
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.5/dist/mindar-image-three.prod.js"></script>
     <style>
@@ -287,11 +290,17 @@
                 bits.push(`❌ 無法讀取 ${TARGETS_PATH}（${String(err)}）`);
                 log('fetch targets.mind failed:', err);
             }
+            bits.push(window.THREE ? '✅ THREE.js 已載入' : '❌ THREE.js 未載入');
+            bits.push(window.MINDAR && window.MINDAR.IMAGE ? '✅ MindAR 已載入' : '❌ MindAR 未載入');
             precheckEl.innerHTML = bits.join('<br>');
         }
 
         // 建立場景 + 5 個 anchor
         async function setupMindAR() {
+
+            if (!window.THREE) { log('THREE 未載入'); alert('Three.js 沒載到'); return; }
+            if (!window.MINDAR || !window.MINDAR.IMAGE) { log('MINDAR 未載入'); alert('MindAR 沒載到'); return; }
+
             log('初始化 MindARThree…');
             mindarThree = new window.MINDAR.IMAGE.MindARThree({
                 container: $('#app'),
