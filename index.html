@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-    <title>Minimal WebAR (dynamic import)</title>
+    <title>Minimal WebAR Camera (UMD)</title>
     <style>
         html,
         body {
@@ -23,8 +23,7 @@
             color: #fff;
             padding: 8px 10px;
             border-radius: 10px;
-            font: 14px/1.4 system-ui, Roboto, Arial;
-            white-space: pre-wrap
+            font: 14px/1.4 system-ui, Roboto, Arial
         }
 
         #startBtn {
@@ -48,93 +47,54 @@
             display: block
         }
     </style>
+
+    <!-- 本地 three（必須先載） -->
+    <script src="./libs/three.min.js"></script>
+    <!-- 本地 MindAR（UMD）→ 會在 window.MINDAR 下面掛 API -->
+    <script src="./libs/mindar-image-three.prod.js"></script>
 </head>
 
 <body>
-    <div id="hud">Booting…</div>
+    <div id="hud">狀態：等待啟動</div>
     <button id="startBtn">▶ Start AR</button>
 
-    <!-- 非模組：先把按鈕事件綁好；按下去才動態 import 模組 -->
     <script>
         const hud = document.getElementById('hud');
-        const log = (...a) => { hud.textContent += '\n' + a.join(' '); console.log(...a); };
-        const set = (t) => { hud.textContent = t; console.log(t); };
+        const set = (t) => hud.textContent = '狀態：' + t;
 
-        // 依序嘗試多個來源；成功就回傳模組
-        async function loadModule(urls) {
-            for (const url of urls) {
-                try {
-                    log('↗️ 嘗試載入', url);
-                    const m = await import(url + (url.includes('?') ? '' : '?v=' + Date.now()));
-                    log('✅ 成功載入', url);
-                    return m;
-                } catch (e) {
-                    log('❌ 載入失敗', url, '-', (e && e.message) || e);
-                }
-            }
-            throw new Error('所有來源皆失敗');
-        }
+        // 確認腳本是否載到
+        if (typeof window.THREE !== 'object') set('three.min.js 未載到');
+        if (!window.MINDAR || !window.MINDAR.IMAGE) set('mindar-image-three.prod.js 未載到');
 
-        let starting = false, started = false;
-
+        let started = false;
         async function startAR() {
-            if (starting || started) return;
-            starting = true;
-            set('STEP 0 準備載入模組…\n（若卡在這裡，代表網路/來源被擋）');
+            if (started) return; started = true;
+            set('啟動中…');
 
-            try {
-                // 1) 載 three.module.js
-                const threeUrls = [
-                    './libs/three.module.js', // 本地（若你有放）
-                    'https://cdn.jsdelivr.net/npm/three@0.152.0/build/three.module.js',
-                    'https://unpkg.com/three@0.152.0/build/three.module.js',
-                ];
-                const THREE = await loadModule(threeUrls);
+            // 用 UMD 寫法：從 window.MINDAR 取得 MindARThree
+            const mindarThree = new window.MINDAR.IMAGE.MindARThree({
+                container: document.body,
+                captureMode: 'environment'     // 優先後鏡頭
+                // 之後要偵測圖片再加：imageTargetSrc: './targets.mind'
+            });
+            const { renderer, scene, camera } = mindarThree;
 
-                // 2) 載 mindar-image-three.module.js
-                const mindarUrls = [
-                    './libs/mindar-image-three.module.js', // 本地（若你有放）
-                    'https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-three.module.js',
-                    'https://unpkg.com/mind-ar@1.2.2/dist/mindar-image-three.module.js',
-                ];
-                const { MindARThree } = await loadModule(mindarUrls);
+            // 簡單補光（非必要）
+            scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, 1.0));
 
-                set('STEP 1 模組就緒 → 啟動管線…');
+            await mindarThree.start();       // 需要使用者手勢
+            set('相機已啟動 ✔');
+            document.getElementById('startBtn')?.remove();
 
-                // 3) 建立 MindARThree（先不放 targets；只驗證相機）
-                const mindarThree = new MindARThree({
-                    container: document.body,
-                    captureMode: 'environment',
-                    // imageTargetSrc: './targets.mind',  // 之後要偵測時再加
-                });
-                const { renderer, scene, camera } = mindarThree;
-
-                // 簡單補光
-                const hemi = new THREE.HemisphereLight(0xffffff, 0x222222, 1.0);
-                scene.add(hemi);
-
-                await mindarThree.start();
-                started = true;
-                set('✅ 相機已啟動');
-                document.getElementById('startBtn')?.remove();
-
-                renderer.setAnimationLoop(() => renderer.render(scene, camera));
-            } catch (err) {
-                set('❌ 失敗：' + (err && err.message || err));
-                starting = false;
-            }
+            renderer.setAnimationLoop(() => renderer.render(scene, camera));
         }
 
-        // 綁手勢（確保行動裝置允許）
-        const go = (e) => { try { e.preventDefault(); e.stopPropagation(); } catch (_) { } startAR(); };
+        const go = (e) => { e.preventDefault(); e.stopPropagation(); startAR().catch(err => set('失敗：' + (err?.message || err))); };
         document.getElementById('startBtn').addEventListener('click', go, { passive: false });
         document.addEventListener('pointerdown', (e) => { if (!started) go(e); }, { once: true });
 
-        // HTTPS 提醒
         if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-            log('⚠️ 需要 HTTPS 或 localhost 才能使用相機');
-        } else {
-            log('環境 OK，請按 Start AR');
+            set('需要 HTTPS 或 localhost 才能使用相機');
         }
     </script>
 </body>
